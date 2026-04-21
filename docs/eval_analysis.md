@@ -7,13 +7,8 @@
 | Retrieval    | 24/25     | 96%  |
 | End-to-end   | 10/15     | 67%  |
 
-### Retrieval Variance
-
-Ran the full 25-case retrieval eval 5 times in sequence. Result: stdev 0.00 across all runs — every case produced identical outcomes every time.
-
-This was initially surprising, then obvious. The retrieval path — sentence-transformer embedding, Chroma cosine similarity, BM25, flashrank cross-encoder rerank — contains no stochastic components. No LLM calls, no sampling, no temperature. Given the same query and the same index, the output is mathematically fixed. The variance measurement was a null result by construction.
-
-The useful takeaway is about where nondeterminism lives in Aether: not in retrieval. Any run-to-run variance in end-to-end evals comes from the LLM agents (planner, executor, critic), not from the retrieval layer. When diagnosing e2e failures, retrieval can be held fixed and the LLM behavior isolated.
+- Retrieval variance: 0.00 stdev across 5 runs. Pipeline contains no stochastic components (deterministic embedding, BM25, and cross-encoder rerank), so runs are exactly reproducible.
+- End-to-end variance: not measured. A full suite run costs ~$0.65 (roughly $0.05 per case × 15 cases); multi-run variance measurement would multiply that linearly. Deferred until specific failure cases warranted investigation. 
 
 ---
 
@@ -68,11 +63,14 @@ Tests precision@5 of the hybrid retriever (Chroma dense + BM25 + flashrank reran
 |---|-------|---------------|--------|
 | 15 | Which partner received distributions disproportionate to their ownership share? | Ironwood | PASS |
 
-### The One Persistent Failure
+### Known limitation (1)
 
-The single failing case (cross_doc_ownership_reference) fails deterministically — 0/5 runs passed it. It's a cross-document reference query: answering it requires chunks from both the fund agreement (which contains the rule being tested) and a transaction CSV (which contains the data to test against). Single-query retrieval returns top-K results ranked by similarity to one query, and those results cluster in the document that lexically matches the query best. The other document's chunks never make the cut.
+**Case 9:** "Is there a partner whose distribution exceeds their net income allocation by more than 5x?"
 
-The fix is multi-query retrieval — an LLM decomposes the question into sub-queries, retrieves from each, and merges. That's a different retrieval architecture and I chose not to build it. The demo corpus has one case that triggers this failure mode, and the infrastructure change (LLM in the retrieval path, query planning, result fusion) is large enough that it deserves its own project phase rather than a bolt-on. Documented as a known limitation.
+- **Expected chunk:** Ironwood (from the CSV)
+- **What happens:** BM25 scores the fund agreement higher because the query language ("distribution exceeds ... allocation") closely matches the agreement's legal phrasing. The dense retriever also drifts toward the agreement. The CSV chunk containing Ironwood's actual numbers gets pushed below the top-5 cutoff.
+- **Why this isn't a retrieval bug:** Similarity-based retrieval optimizes for lexical and semantic overlap with the query. When one document uses the same vocabulary as the query but doesn't contain the answer, and another document contains the answer but uses different vocabulary (column headers + numbers), similarity search will prefer the wrong document. This is a known fundamental limitation of retrieval-based systems on cross-document analytical queries.
+- **Possible fixes:** Query expansion (rewrite the query to explicitly mention CSV columns), HyDE (generate a hypothetical answer and retrieve against that), or a two-stage approach where the planner identifies required data sources before retrieval.
 
 ---
 
@@ -169,4 +167,28 @@ If all three fixes land, projected pass rate moves from 10/15 (67%) to 14-15/15 
 
 ## What I Would Do Differently From The Start
 
-If I were starting Aether over, I would build the eval suite before building the agents — not after. The retrieval evals were relatively easy to backfill because retrieval is stateless and deterministic, but the end-to-end evals exposed failure modes (SQL hallucination, type serialization, tool attribution) that would have shaped the architecture earlier. Specifically, I would have grounded the planner on full schema metadata (column names *and* types) from day one instead of just column names, because the gap between "the LLM knows the column exists" and "the LLM knows what type it is" turned out to be the single largest source of failures. I would also have designed the tool interface to enforce structured inputs more strictly — FlagItemTool's flexible argument parsing saved development time early but created ambiguity that the LLM exploits unpredictably. More rigid tool schemas would have made the executor's job easier and the eval results more deterministic. Finally, I would have added a schema validation step between the planner and executor: before executing any SQL, run an `EXPLAIN` or dry-run parse to catch syntax errors and hallucinated references at plan time rather than at execution time, when the retry loop has less context about what went wrong.
+Building Aether taught me that LLM engineering has a different cost 
+structure than normal software, and I wish I'd internalized that before 
+writing agent code. If I started over, the first thing I'd do is build 
+an eval harness that lets me run one case at a time — the `-k` filter 
+pattern I eventually learned — so I could iterate on the planner 
+without paying for a full 15-case suite every time.
+
+The second thing I'd do is set up schema grounding from day one, even 
+if minimal. The most expensive failures I hit were planner 
+hallucinations — SQL that referenced tables and columns that don't 
+exist, or syntax that works in PostgreSQL but not DuckDB. The planner 
+wasn't wrong in a random way; it was confidently wrong, generating 
+plausible-sounding queries against an imagined schema. I hadn't 
+appreciated how often LLMs produce output that is contextually relevant 
+but not grounded in the actual data. Injecting real column names and 
+types into the planner's prompt eliminated an entire category of 
+failures in a single change.
+
+Third, I'd structure the context layer as hybrid from the start — 
+grounding for enumerable environment details (file paths, schemas, 
+tool signatures) and RAG for the unstructured knowledge (policies, 
+rules, documentation). I initially treated RAG as the universal 
+solution, but retrieval is the wrong tool for injecting deterministic 
+context. Grounding is cheaper, faster, and more reliable when you can 
+enumerate what the LLM needs to know.
