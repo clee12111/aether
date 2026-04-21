@@ -7,8 +7,13 @@
 | Retrieval    | 24/25     | 96%  |
 | End-to-end   | 10/15     | 67%  |
 
-- Retrieval variance: [PLACEHOLDER — run 3x and record min/max/stddev for precision@5]
-- End-to-end variance: [PLACEHOLDER — run 3x and record verdict flip rate per case]
+### Retrieval Variance
+
+Ran the full 25-case retrieval eval 5 times in sequence. Result: stdev 0.00 across all runs — every case produced identical outcomes every time.
+
+This was initially surprising, then obvious. The retrieval path — sentence-transformer embedding, Chroma cosine similarity, BM25, flashrank cross-encoder rerank — contains no stochastic components. No LLM calls, no sampling, no temperature. Given the same query and the same index, the output is mathematically fixed. The variance measurement was a null result by construction.
+
+The useful takeaway is about where nondeterminism lives in Aether: not in retrieval. Any run-to-run variance in end-to-end evals comes from the LLM agents (planner, executor, critic), not from the retrieval layer. When diagnosing e2e failures, retrieval can be held fixed and the LLM behavior isolated.
 
 ---
 
@@ -63,14 +68,11 @@ Tests precision@5 of the hybrid retriever (Chroma dense + BM25 + flashrank reran
 |---|-------|---------------|--------|
 | 15 | Which partner received distributions disproportionate to their ownership share? | Ironwood | PASS |
 
-### Known limitation (1)
+### The One Persistent Failure
 
-**Case 9:** "Is there a partner whose distribution exceeds their net income allocation by more than 5x?"
+The single failing case (cross_doc_ownership_reference) fails deterministically — 0/5 runs passed it. It's a cross-document reference query: answering it requires chunks from both the fund agreement (which contains the rule being tested) and a transaction CSV (which contains the data to test against). Single-query retrieval returns top-K results ranked by similarity to one query, and those results cluster in the document that lexically matches the query best. The other document's chunks never make the cut.
 
-- **Expected chunk:** Ironwood (from the CSV)
-- **What happens:** BM25 scores the fund agreement higher because the query language ("distribution exceeds ... allocation") closely matches the agreement's legal phrasing. The dense retriever also drifts toward the agreement. The CSV chunk containing Ironwood's actual numbers gets pushed below the top-5 cutoff.
-- **Why this isn't a retrieval bug:** Similarity-based retrieval optimizes for lexical and semantic overlap with the query. When one document uses the same vocabulary as the query but doesn't contain the answer, and another document contains the answer but uses different vocabulary (column headers + numbers), similarity search will prefer the wrong document. This is a known fundamental limitation of retrieval-based systems on cross-document analytical queries.
-- **Possible fixes:** Query expansion (rewrite the query to explicitly mention CSV columns), HyDE (generate a hypothetical answer and retrieve against that), or a two-stage approach where the planner identifies required data sources before retrieval.
+The fix is multi-query retrieval — an LLM decomposes the question into sub-queries, retrieves from each, and merges. That's a different retrieval architecture and I chose not to build it. The demo corpus has one case that triggers this failure mode, and the infrastructure change (LLM in the retrieval path, query planning, result fusion) is large enough that it deserves its own project phase rather than a bolt-on. Documented as a known limitation.
 
 ---
 
