@@ -35,6 +35,7 @@ class FlagItemTool(BaseTool):
                 row_dict = dict(zip(columns, row)) if columns else {}
                 item_id = str(
                     row_dict.get("item_id")
+                    or row_dict.get("entity")
                     or row_dict.get("partner_name")
                     or row_dict.get("partner")
                     or row_dict.get("name")
@@ -47,6 +48,7 @@ class FlagItemTool(BaseTool):
         # Single-item flag from explicit args
         item_id = str(
             args.get("item_id")
+            or args.get("entity")
             or args.get("partner")
             or args.get("name")
             or args.get("partner_name")

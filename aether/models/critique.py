@@ -25,13 +25,13 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 Severity = Literal["critical", "warning", "info"]
 Verdict = Literal["pass", "partial", "fail"]
 
-# Predefined flag categories for the finance domain.
-# The Critic may emit any string; these are the expected values for the demo.
+# Predefined flag categories. The Critic may emit any string; these are
+# the expected values used in evals and the Streamlit UI.
 FlagCategory = Literal[
-    "allocation_mismatch",    # allocation % inconsistent with fund agreement
+    "allocation_mismatch",    # computed share deviates from the expected split
     "missing_data",           # required field or document absent
     "calculation_error",      # arithmetic inconsistency in the output
-    "policy_violation",       # rule in the fund agreement explicitly violated
+    "policy_violation",       # item violates a stated rule from the reference policy document
     "data_quality",           # input data appears malformed or suspect
     "reconciliation_gap",     # debit/credit imbalance or unexplained difference
     "other",                  # catch-all for Critic discretion
