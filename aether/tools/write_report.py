@@ -14,7 +14,7 @@ class WriteReportTool(BaseTool):
     def run(self, args: dict) -> dict:
         title = args["title"]
         fmt = args.get("format", "json").lower()
-        results = args.get("results", {})
+        results = args.get("results") or args.get("prior_results", {})
 
         _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
