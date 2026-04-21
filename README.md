@@ -43,7 +43,7 @@ TRACE STORE        every LLM call + tool call --> SQLite (WAL mode)
 | Eval suite | Cases | Result | Notes |
 |---|---|---|---|
 | Retrieval precision@5 | 25 | 24/25 (96%) | stdev 0.00 across 5 runs; pipeline is deterministic |
-| End-to-end | 15 | 10/15 (67%) | up from 7/15 baseline; 5 failures analyzed in docs/eval_analysis.md |
+| End-to-end | 15 | 11/15 (73%) | Reliable floor. Full run results fluctuate 10-13 due to planner non-determinism; see docs/eval_analysis.md |
 
 Cost per end-to-end run: ~$0.65 (Opus planner + Haiku critic; executor is LLM-free).
 
