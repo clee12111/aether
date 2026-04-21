@@ -5,10 +5,10 @@
 | Suite        | Result    | Rate |
 |--------------|-----------|------|
 | Retrieval    | 24/25     | 96%  |
-| End-to-end   | 10/15     | 67%  |
+| End-to-end   | 11/15     | 73%  |
 
 - Retrieval variance: 0.00 stdev across 5 runs. Pipeline contains no stochastic components (deterministic embedding, BM25, and cross-encoder rerank), so runs are exactly reproducible.
-- End-to-end variance: not measured. A full suite run costs ~$0.65 (roughly $0.05 per case × 15 cases); multi-run variance measurement would multiply that linearly. Deferred until specific failure cases warranted investigation. 
+- End-to-end variance: Full e2e variance measured empirically in one run: suite pass rate fluctuates between 10 and 13 of 15 cases across runs due to planner SQL generation non-determinism. The reliable floor is 11/15 -- cases that pass regardless of LLM stochasticity.
 
 ---
 
@@ -78,7 +78,7 @@ Tests precision@5 of the hybrid retriever (Chroma dense + BM25 + flashrank reran
 
 Tests the full pipeline: ingest documents, retrieve context, plan steps, execute with tools (LoadData, RunSQL, FlagItem, WriteReport), critique the result. Each case specifies a goal, input files, expected verdict, minimum flag count, and (optionally) a partner that must be flagged.
 
-### Passing (10)
+### Reliably passing (11)
 
 **Single-file CSV — 7/7**
 | Case ID | Goal summary | Files |
@@ -91,10 +91,11 @@ Tests the full pipeline: ingest documents, retrieve context, plan steps, execute
 | distribution_exceeds_opening | Flag partners where distribution >30% of opening balance | capital accounts CSV |
 | ironwood_anomaly | Analyze Ironwood Ventures for distribution anomalies | capital accounts CSV |
 
-**Multi-file agreement — 1/3**
+**Multi-file agreement — 2/3**
 | Case ID | Goal summary | Files |
 |---------|-------------|-------|
 | small_holder_cap | Verify <15% owners didn't exceed 1.5x distribution cap (Sec 4.3) | capital accounts CSV + fund agreement |
+| quarterly_cap_check | Check if any partner's distribution exceeds the 25% quarterly cap | capital accounts CSV + fund agreement |
 
 **Transaction log — 1/3**
 | Case ID | Goal summary | Files |
@@ -106,30 +107,33 @@ Tests the full pipeline: ingest documents, retrieve context, plan steps, execute
 |---------|-------------|-------|
 | compliance_threshold_flag | Flag transactions exceeding $100K threshold (Sec 2.1) | compliance policy + transaction log |
 
+### Intermittent (passing on some runs)
+
+These cases pass when the planner generates valid SQL, but fail when it hallucinates schema details. They are not reliably reproducible in either direction.
+
+| Case ID | Goal summary | Files | Notes |
+|---------|-------------|-------|-------|
+| ownership_tolerance_check | Verify ownership percentages sum to 100% within 0.5% tolerance | capital accounts CSV | Fails when planner puts aggregates in WHERE instead of HAVING |
+| compliance_review | Review all transactions for compliance policy violations | compliance policy + transaction log | Fails when planner uses INTERVAL arithmetic on string dates |
+
+### Resolved
+
+**Category 1 (JSON serialization of Decimal)** was fixed by adding `default=str` to `json.dumps` calls in write_report and the e2e test harness. `quarterly_cap_check` now reliably passes.
+
 ### Failures — categorized
 
-#### Category 1: Test harness bug (1 case)
+#### Category 2: Planner SQL hallucination (1 reliable failure, 2 intermittent)
 
-**quarterly_cap_check:** Check if any partner's distribution exceeds the 25% quarterly cap from the fund agreement.
+The planner generates SQL that references columns, tables, or syntax that don't exist in the actual data.
 
-- **Failure mode:** `TypeError: Object of type Decimal is not JSON serializable` when the executor tries to serialize DuckDB query results.
-- **Root cause:** DuckDB returns `decimal.Decimal` objects for numeric columns. The executor's `json.dumps()` call in result packaging doesn't handle non-standard numeric types.
-- **Fix:** Add `default=str` to the `json.dumps()` call in the executor's result serialization path. Trivial one-line fix.
-- **Estimated effort:** 15 minutes.
-- **Estimated impact:** 1 case resolved. This case would otherwise pass — the planner and SQL are correct.
+**allocation_mismatch (reliable failure):** Identify income allocations that don't match expected ownership-based shares.
+- **Hallucination:** Invented a table name `ownership` that doesn't exist. The planner assumed a normalized schema instead of the flat CSV it was given.
 
-#### Category 2: Planner SQL hallucination (3 cases)
+**ownership_tolerance_check (intermittent):** Verify ownership percentages sum to 100% within 0.5% tolerance.
+- **Hallucination:** Used aggregates directly in a `WHERE` clause (`WHERE SUM(ownership_pct) > ...`). DuckDB rejects this — aggregates must be in `HAVING` or wrapped in a CTE/subquery. Passes on runs where the planner generates a CTE instead.
 
-All three cases fail because the planner generates SQL that references columns, tables, or syntax that don't exist in the actual data.
-
-**allocation_mismatch:** Identify income allocations that don't match expected ownership-based shares.
-- **Hallucination:** Invented a table name `ownership_pct` that doesn't exist. The planner assumed a normalized schema instead of the flat CSV it was given.
-
-**ownership_tolerance_check:** Verify ownership percentages sum to 100% within 0.5% tolerance.
-- **Hallucination:** Used aggregates directly in a `WHERE` clause (`WHERE SUM(ownership_pct) > ...`). DuckDB rejects this — aggregates must be in `HAVING` or wrapped in a CTE/subquery.
-
-**compliance_review:** Review all transactions for compliance policy violations.
-- **Hallucination:** Treated a string date column (`transaction_date`) as a native date type and used `INTERVAL '30 days'` arithmetic on it. DuckDB can't subtract intervals from strings.
+**compliance_review (intermittent):** Review all transactions for compliance policy violations.
+- **Hallucination:** Treated a string date column (`transaction_date`) as a native date type and used `INTERVAL '30 days'` arithmetic on it. DuckDB can't subtract intervals from strings. Passes on runs where the planner uses `CAST()` or string comparison instead.
 
 **Root cause:** The planner receives grounding context that includes column *names* (injected from the loaded data), but not column *types* or DuckDB-specific SQL constraints. The LLM fills in the gaps with assumptions from its training data — often PostgreSQL or MySQL idioms that don't transfer.
 
@@ -139,29 +143,50 @@ All three cases fail because the planner generates SQL that references columns, 
 3. An explicit negative constraint: "Do not reference tables not listed above"
 
 - **Estimated effort:** 2-3 hours (modify planner prompt + grounding injection in executor, add few-shot examples, re-run evals).
-- **Estimated impact:** 2/3 cases likely resolved. The `compliance_review` case involves multi-step reasoning (cross-referencing policy thresholds with transaction data) and may still struggle even with better grounding.
+- **Estimated impact:** Would stabilize the 2 intermittent cases and likely resolve `allocation_mismatch`.
 
-#### Category 3: Non-deterministic executor behavior (1 case)
+#### Category 3: FlagItemTool attribution bug (1 case)
 
 **duplicate_transactions:** Find duplicate transactions (same date, partner, type, amount) in the multi-quarter transaction log.
 
-- **Failure mode:** The SQL correctly identifies both duplicate pairs (Ironwood and Benchmark), but the FlagItemTool assigns `item_id: "Benchmark Capital"` to all four flags instead of correctly attributing two flags to each partner.
+- **Failure mode:** The SQL correctly identifies both duplicate pairs (Ironwood and Benchmark), but the FlagItemTool assigns `item_id: "Benchmark Capital"` to all four flags instead of correctly attributing two flags to each partner. The critic catches this and returns a `fail` verdict.
 - **Root cause:** Likely a loop variable bug in FlagItemTool where the `item_id` is captured by reference rather than by value, or a prompt ambiguity where the executor's per-flag instructions don't clearly specify which partner each flag belongs to. When the LLM generates multiple flag calls in sequence, the last-resolved `item_id` overwrites earlier ones.
 - **Fix:** Audit FlagItemTool for iterator state management. If the bug is in the tool, fix the loop variable binding. If it's prompt-driven, consider splitting into `flag_items` (bulk, takes a list) and `flag_item` (single) to remove ambiguity about per-item attribution.
 - **Estimated effort:** 1-2 hours.
-- **Estimated impact:** 1 case resolved. May also improve flag attribution quality in passing cases where it wasn't caught because the test only checks flag count, not flag content.
+- **Estimated impact:** 1 case resolved. Most consistent failure in the suite. May also improve flag attribution quality in passing cases where it wasn't caught because the test only checks flag count, not flag content.
+
+#### Category 4: Critic over-escalation (1 case)
+
+**distribution_exceeds_opening:** Flag partners where distribution exceeds 30% of opening balance.
+
+- **Failure mode:** The pipeline produces correct output — the executor identifies the right partner and raises the flag. But the critic returns a `fail` verdict despite its own summary indicating the goal was met ("correctly identified one partner with excessive distributions, flag was raised as required").
+- **Root cause:** Critic calibration issue. The critic prompt may be too strict on what constitutes "pass" vs "escalate," causing it to fail cases where the data output is correct but some secondary quality signal (e.g., report formatting, flag metadata) doesn't meet an implicit standard.
+- **Fix:** Adjust critic few-shot examples to include cases where correct output with minor metadata gaps should receive "pass" or "partial," not "fail." May also need an explicit instruction: "If the goal's core requirement is met, do not return fail for cosmetic issues."
+- **Estimated effort:** 1-2 hours with few-shot tuning.
+- **Estimated impact:** 1 case resolved. Would also reduce false escalations to human review queue across all runs.
+
+#### Category 5: Executor output truncation and data quality (1 case)
+
+**compliance_threshold_flag:** Flag transactions exceeding $100K threshold (Sec 2.1) using compliance policy and transaction log.
+
+- **Failure mode:** The critic flagged a truncated final record and a duplicate transaction in the executor output. The pipeline produced partially correct results, but data quality issues in the output prevented a clean pass.
+- **Root cause:** Not yet fully diagnosed. Possible causes: executor truncating SQL result rows, DuckDB query returning more rows than expected due to join duplication, or write_report serializing a subset of results. Needs investigation to isolate whether the issue is in RunSQLTool, the executor's result passing, or WriteReportTool.
+- **Estimated effort:** Needs investigation first — 1-2 hours to diagnose, then fix depends on findings.
+- **Estimated impact:** 1 case resolved if the truncation source is identified and fixed.
 
 ---
 
 ## What I Would Fix Next
 
-1. **Planner SQL grounding** (Category 2) — highest impact. Three cases fail because the planner hallucinates schema details. Adding column types and few-shot DuckDB examples to the grounding context is a prompt-only change with no architectural risk. Expected to resolve 2 of 3 cases. *Estimated effort: 2-3 hours.*
+1. **FlagItemTool attribution bug** (Category 3) — most consistent failure. The `duplicate_transactions` case fails reliably every run because of incorrect `item_id` assignment. *Estimated effort: 1-2 hours.*
 
-2. **JSON serialization bug** (Category 1) — lowest effort. One line (`default=str`) unblocks a case that already produces the correct result. *Estimated effort: 15 minutes.*
+2. **Planner SQL grounding** (Category 2) — would stabilize the 2 intermittent cases (`ownership_tolerance_check`, `compliance_review`) and likely resolve `allocation_mismatch`. Adding column types and few-shot DuckDB examples to the grounding context is a prompt-only change with no architectural risk. *Estimated effort: 2-3 hours.*
 
-3. **FlagItemTool iterator bug** (Category 3) — resolves the last failure category and improves flag attribution reliability across all cases. *Estimated effort: 1-2 hours.*
+3. **Critic calibration** (Category 4) — `distribution_exceeds_opening` produces correct output but gets a wrong verdict. Few-shot tuning in the critic prompt to distinguish "goal met with minor gaps" from genuine failures. *Estimated effort: 1-2 hours.*
 
-If all three fixes land, projected pass rate moves from 10/15 (67%) to 14-15/15 (93-100%).
+4. **Executor output completeness** (Category 5) — `compliance_threshold_flag` needs investigation before a fix can be scoped. Lowest priority since the root cause is unclear. *Estimated effort: 1-2 hours to diagnose.*
+
+If fixes 1-3 land and the intermittent cases stabilize, projected pass rate moves from 11/15 (73%) to 14-15/15 (93-100%).
 
 ---
 
