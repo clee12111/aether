@@ -38,16 +38,12 @@ from aether.models.chunk import Chunk
 logger = logging.getLogger(__name__)
 
 # ── Query classification patterns ─────────────────────────────────────────────
+# Generic patterns — no domain-specific terms.  Column-name matching is built
+# dynamically from indexed chunk metadata (see _rebuild_column_pattern).
 
-_DATA_PARTNERS = re.compile(
-    r"(?i)\b(Ironwood|Sequoia|Tiger|Benchmark|Founders|Andreessen|Horowitz)\b"
-)
 _DATA_NUMBERS = re.compile(r"\$[\d,]+|\b\d[\d,]*000\b|\b\d+%")
-_DATA_COLUMNS = re.compile(
-    r"(?i)\b(opening_balance|closing_balance|distributions|contributions|net_income|ownership_pct)\b"
-)
 _DATA_AGGREGATES = re.compile(
-    r"(?i)\b(highest|lowest|total|sum|how much|how many|which partner|who)\b"
+    r"(?i)\b(highest|lowest|total|sum|how much|how many|which|who)\b"
 )
 _POLICY_KEYWORDS = re.compile(
     r"\b(rule|policy|section|limit|cap|requirement|allowed|threshold|compliance|regulation)\b"
@@ -104,6 +100,10 @@ class HybridRetriever:
         self._bm25: BM25Okapi | None = None
         self._bm25_chunks: list[Chunk] = []
 
+        # Dynamic column-name pattern — rebuilt by index() / _warm_bm25()
+        self._indexed_columns: set[str] = set()
+        self._data_columns_re: re.Pattern[str] | None = None
+
     # ── Indexing ───────────────────────────────────────────────────────────────
 
     def index(self, chunks: list[Chunk], collection_name: str | None = None) -> None:
@@ -149,6 +149,7 @@ class HybridRetriever:
         existing_ids = {c.chunk_id for c in self._bm25_chunks}
         self._bm25_chunks.extend(c for c in chunks if c.chunk_id not in existing_ids)
         self._rebuild_bm25()
+        self._collect_columns(chunks)
 
         logger.info(
             "Index ready: %d total chunks, collection=%r",
@@ -158,15 +159,16 @@ class HybridRetriever:
 
     # ── Query classification ─────────────────────────────────────────────────
 
-    @staticmethod
-    def _classify_query(query: str) -> str:
+    def _classify_query(self, query: str) -> str:
         """Classify a query as ``"data"``, ``"policy"``, or ``"any"``.
 
         Used to apply metadata filtering before reranking so that CSV/Excel
         queries are not drowned by text/PDF chunks that share vocabulary.
+        Column-name matching is built dynamically from indexed chunk metadata.
         """
-        if (_DATA_PARTNERS.search(query) or _DATA_NUMBERS.search(query)
-                or _DATA_COLUMNS.search(query) or _DATA_AGGREGATES.search(query)):
+        if (_DATA_NUMBERS.search(query)
+                or (self._data_columns_re is not None and self._data_columns_re.search(query))
+                or _DATA_AGGREGATES.search(query)):
             return "data"
         if _POLICY_KEYWORDS.search(query):
             return "policy"
@@ -343,6 +345,24 @@ class HybridRetriever:
             return self._collection
         return self._get_or_create_collection(name)
 
+    def _collect_columns(self, chunks: list[Chunk]) -> None:
+        """Extract column names from CSV/Excel chunks and rebuild the regex."""
+        for c in chunks:
+            if c.metadata.document_type in ("csv", "excel") and c.metadata.column_names:
+                self._indexed_columns.update(c.metadata.column_names)
+        self._rebuild_column_pattern()
+
+    def _rebuild_column_pattern(self) -> None:
+        """Build a case-insensitive regex from all indexed column names."""
+        if not self._indexed_columns:
+            self._data_columns_re = None
+            return
+        escaped = sorted(re.escape(col) for col in self._indexed_columns)
+        self._data_columns_re = re.compile(
+            r"(?i)\b(" + "|".join(escaped) + r")\b"
+        )
+        logger.debug("Column pattern rebuilt with %d terms", len(self._indexed_columns))
+
     def _rebuild_bm25(self) -> None:
         self._bm25 = BM25Okapi([c.bm25_tokens() for c in self._bm25_chunks])
         logger.debug("BM25 rebuilt with %d documents", len(self._bm25_chunks))
@@ -377,6 +397,7 @@ class HybridRetriever:
         self._bm25_chunks = chunks
         if chunks:
             self._rebuild_bm25()
+            self._collect_columns(chunks)
             logger.info("BM25 warmed with %d chunks", len(chunks))
 
 
