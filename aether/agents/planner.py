@@ -6,6 +6,7 @@ import os
 import re
 import time
 import uuid
+from pathlib import Path
 
 import anthropic
 
@@ -17,30 +18,30 @@ from aether.trace.store import TraceStore
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a financial workflow planner. Given a goal and document context, output a JSON ExecutionPlan.
+_SYSTEM_PROMPT_TEMPLATE = """You are a financial workflow planner. Given a goal and document context, output a JSON ExecutionPlan.
 
 Available tools: load_data, retrieve_context, run_sql, flag_item, write_report
 
 Output this JSON structure (no markdown fences):
-{
+{{
   "plan_id": "<uuid4>",
   "run_id": "<from input>",
   "goal": "<verbatim goal>",
   "reasoning": "<why these steps>",
   "context_used": ["<one line per chunk used>"],
   "steps": [
-    {
+    {{
       "step_id": "<unique_slug>",
       "name": "<short name>",
       "description": "<what and why>",
       "tool": "<tool name>",
-      "tool_args": {},
+      "tool_args": {{}},
       "depends_on": [],
       "expected_output": "<specific success criterion>",
       "is_optional": false
-    }
+    }}
   ]
-}
+}}
 
 Rules:
 - step_id: lowercase letters/digits/underscores only, unique within the plan
@@ -49,47 +50,17 @@ Rules:
 - SQL rule: never use window functions (SUM OVER, ROW_NUMBER OVER, etc.) inside a WHERE clause. Use a CTE or subquery first, then filter in the outer query.
 
 Example:
-Goal: "Check Q4 distributions match pro-rata allocations"
-{
-  "plan_id": "aaaaaaaa-0000-0000-0000-000000000001",
-  "run_id": "run-001",
-  "goal": "Check Q4 distributions match pro-rata allocations",
-  "reasoning": "Load the data, compute expected shares, flag violations, write report.",
-  "context_used": ["Q4 capital accounts CSV"],
-  "steps": [
-    {
-      "step_id": "load_accounts",
-      "name": "Load capital accounts",
-      "description": "Load Q4 CSV into DuckDB table 'accounts'.",
-      "tool": "load_data",
-      "tool_args": {"file_path": "q4.csv", "table_name": "accounts"},
-      "depends_on": [],
-      "expected_output": "Table 'accounts' with investor_id, capital_commitment, q4_distribution.",
-      "is_optional": false
-    },
-    {
-      "step_id": "find_violations",
-      "name": "Find over-allocated investors",
-      "description": "SQL to compare actual vs expected pro-rata distribution.",
-      "tool": "run_sql",
-      "tool_args": {"sql": "SELECT investor_id, q4_distribution, ROUND(capital_commitment * 1.0 / SUM(capital_commitment) OVER () * SUM(q4_distribution) OVER (), 2) AS expected FROM accounts"},
-      "depends_on": ["load_accounts"],
-      "expected_output": "Rows showing actual vs expected distribution per investor.",
-      "is_optional": false
-    },
-    {
-      "step_id": "write_report",
-      "name": "Write reconciliation report",
-      "description": "Produce the final report.",
-      "tool": "write_report",
-      "tool_args": {"title": "Q4 Reconciliation", "format": "json"},
-      "depends_on": ["find_violations"],
-      "expected_output": "JSON report with summary and flagged items.",
-      "is_optional": false
-    }
-  ]
-}
+{fewshot}
 """
+
+
+def _load_system_prompt() -> str:
+    fewshot_path = Path(settings.prompts_dir) / "planner_fewshots.txt"
+    fewshot = fewshot_path.read_text(encoding="utf-8")
+    return _SYSTEM_PROMPT_TEMPLATE.format(fewshot=fewshot)
+
+
+SYSTEM_PROMPT = _load_system_prompt()
 
 
 class PlannerAgent:

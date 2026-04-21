@@ -5,6 +5,7 @@ import logging
 import re
 import time
 import uuid
+from pathlib import Path
 
 import anthropic
 
@@ -16,28 +17,28 @@ from aether.trace.store import TraceStore
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a financial workflow critic. Compare the executor output against the original goal. Return a JSON CritiqueResult — no markdown fences.
+_SYSTEM_PROMPT_TEMPLATE = """You are a financial workflow critic. Compare the executor output against the original goal. Return a JSON CritiqueResult — no markdown fences.
 
 Output this exact JSON structure:
-{
+{{
   "run_id": "<from input>",
   "goal": "<verbatim goal from input>",
   "overall_verdict": "pass|partial|fail",
-  "confidence": 0.0–1.0,
+  "confidence": 0.0-1.0,
   "flags": [
-    {
+    {{
       "severity": "critical|warning|info",
       "category": "allocation_mismatch|reconciliation_gap|calculation_error|missing_data|policy_violation|data_quality|other",
       "description": "<specific description of the issue, at least 10 characters>",
       "evidence": "<verbatim excerpt or quantitative discrepancy, at least 5 characters>",
       "step_ref": "<step_id that produced this issue, or null>",
       "suggested_fix": "<optional fix suggestion, or null>"
-    }
+    }}
   ],
   "summary": "<concise paragraph summarising the critique outcome, at least 20 characters>",
   "recommendations": ["<action 1>", "<action 2>"],
   "steps_reviewed": ["<step_id_1>", "<step_id_2>"]
-}
+}}
 
 Rules:
 - overall_verdict must be "pass" if there are zero critical flags and the goal is fully met
@@ -50,28 +51,17 @@ Rules:
 - evidence must be a concrete data point, not a vague statement
 
 Example:
-Goal: "Reconcile Q4 distributions and flag allocation mismatches"
-Executor output: {"load_accounts": {"row_count": 6}, "find_violations": {"columns": ["partner_name", "deviation"], "rows": [["Ironwood Ventures LLC", 24.1]], "row_count": 1}}
-{
-  "run_id": "run-001",
-  "goal": "Reconcile Q4 distributions and flag allocation mismatches",
-  "overall_verdict": "fail",
-  "confidence": 0.92,
-  "flags": [
-    {
-      "severity": "critical",
-      "category": "allocation_mismatch",
-      "description": "Ironwood Ventures LLC received 36.1% of total distributions but holds only 12.0% ownership — a 24.1 percentage point deviation.",
-      "evidence": "distributions=960000, ownership_pct=12.0, actual_pct=36.1, deviation=24.1",
-      "step_ref": "find_violations",
-      "suggested_fix": "Recalculate and redistribute the Q4 distribution for Ironwood Ventures LLC."
-    }
-  ],
-  "summary": "One critical allocation mismatch was identified. Ironwood Ventures LLC received a disproportionate share of distributions relative to their ownership percentage.",
-  "recommendations": ["Review and correct Ironwood Ventures LLC distribution", "Re-run reconciliation after correction"],
-  "steps_reviewed": ["load_accounts", "find_violations", "flag_violations", "write_report"]
-}
+{fewshot}
 """
+
+
+def _load_system_prompt() -> str:
+    fewshot_path = Path(settings.prompts_dir) / "critic_fewshots.txt"
+    fewshot = fewshot_path.read_text(encoding="utf-8")
+    return _SYSTEM_PROMPT_TEMPLATE.format(fewshot=fewshot)
+
+
+SYSTEM_PROMPT = _load_system_prompt()
 
 
 class CriticAgent:

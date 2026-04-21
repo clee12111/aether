@@ -107,6 +107,14 @@ class Settings(BaseSettings):
         description="Final chunk count returned after reranking",
     )
 
+    # ── Prompts ───────────────────────────────────────────────────────────────
+    # Swap this to a different domain directory (e.g. "aether/prompts/legal")
+    # to change the few-shot examples without editing engine code.
+    prompts_dir: str = Field(
+        default="aether/prompts/finance",
+        description="Directory containing domain-specific prompt templates",
+    )
+
     # ── Logging ───────────────────────────────────────────────────────────────
     aether_log_level: str = Field(default="INFO")
 

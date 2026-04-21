@@ -1,0 +1,40 @@
+Goal: "Check Q4 distributions match pro-rata allocations"
+{
+  "plan_id": "aaaaaaaa-0000-0000-0000-000000000001",
+  "run_id": "run-001",
+  "goal": "Check Q4 distributions match pro-rata allocations",
+  "reasoning": "Load the data, compute expected shares, flag violations, write report.",
+  "context_used": ["Q4 capital accounts CSV"],
+  "steps": [
+    {
+      "step_id": "load_accounts",
+      "name": "Load capital accounts",
+      "description": "Load Q4 CSV into DuckDB table 'accounts'.",
+      "tool": "load_data",
+      "tool_args": {"file_path": "q4.csv", "table_name": "accounts"},
+      "depends_on": [],
+      "expected_output": "Table 'accounts' with investor_id, capital_commitment, q4_distribution.",
+      "is_optional": false
+    },
+    {
+      "step_id": "find_violations",
+      "name": "Find over-allocated investors",
+      "description": "SQL to compare actual vs expected pro-rata distribution.",
+      "tool": "run_sql",
+      "tool_args": {"sql": "SELECT investor_id, q4_distribution, ROUND(capital_commitment * 1.0 / SUM(capital_commitment) OVER () * SUM(q4_distribution) OVER (), 2) AS expected FROM accounts"},
+      "depends_on": ["load_accounts"],
+      "expected_output": "Rows showing actual vs expected distribution per investor.",
+      "is_optional": false
+    },
+    {
+      "step_id": "write_report",
+      "name": "Write reconciliation report",
+      "description": "Produce the final report.",
+      "tool": "write_report",
+      "tool_args": {"title": "Q4 Reconciliation", "format": "json"},
+      "depends_on": ["find_violations"],
+      "expected_output": "JSON report with summary and flagged items.",
+      "is_optional": false
+    }
+  ]
+}
