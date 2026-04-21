@@ -1,0 +1,79 @@
+HORIZON GROWTH PARTNERS FUND I, LP
+LIMITED PARTNERSHIP AGREEMENT — DISTRIBUTION AND ALLOCATION PROVISIONS
+Effective Date: January 1, 2024
+
+ARTICLE IV — DISTRIBUTIONS AND ALLOCATIONS
+
+Section 4.1 — Pro-Rata Distribution Requirement
+All distributions of Available Cash shall be made to the Partners pro-rata in
+accordance with their respective Ownership Percentages as set forth in
+Schedule A, unless the General Partner has approved an exception in writing
+pursuant to Section 4.5. No distribution shall be made on a non-pro-rata
+basis absent such written approval, which must specify the business
+rationale and be countersigned by the Fund's independent auditor.
+
+Section 4.2 — Quarterly Distribution Cap
+No single Limited Partner shall receive, in any fiscal quarter, distributions
+exceeding twenty-five percent (25%) of the total distributions made to all
+Partners during such quarter. Any amount that would exceed this cap shall be
+retained in the Partner's capital account and distributed in the following
+quarter, subject to the same limitation. The General Partner shall monitor
+compliance with this cap on a quarterly basis.
+
+Section 4.3 — Small-Holder Distribution Cap
+Any Partner whose Ownership Percentage is below fifteen percent (15%) shall
+be subject to an additional distribution limitation: such Partner's
+distributions in any quarter shall not exceed one and one-half times (1.5x)
+the product of (a) such Partner's Ownership Percentage and (b) the total
+distributions made during the quarter. This provision is intended to prevent
+disproportionate cash flow to minority holders.
+
+Section 4.4 — Preferred Return Allocation
+Prior to any profit-sharing distributions under Section 4.6, the Fund shall
+allocate a preferred return of eight percent (8%) per annum on each
+Partner's beginning capital balance for the applicable period. The preferred
+return shall accrue and be allocated on a quarterly basis (2% per quarter)
+and shall be satisfied before any performance-based or incentive
+distributions are calculated. Unpaid preferred return shall accumulate and
+compound quarterly.
+
+Section 4.5 — Written Exceptions
+The General Partner may, in its sole discretion, authorize distributions
+that deviate from the pro-rata requirement of Section 4.1 or the caps set
+forth in Sections 4.2 and 4.3, provided that: (a) such authorization is
+documented in a written memorandum delivered to all affected Partners no
+fewer than ten (10) business days prior to the distribution date; (b) the
+memorandum states the specific business rationale for the deviation; and
+(c) the Fund's independent auditor has reviewed and acknowledged the
+exception.
+
+Section 4.6 — Profit Sharing
+After satisfaction of the Preferred Return under Section 4.4, remaining
+distributable income shall be allocated eighty percent (80%) to the Limited
+Partners (pro-rata by Ownership Percentage) and twenty percent (20%) to the
+General Partner as carried interest, subject to any applicable clawback
+provisions under Article VII.
+
+ARTICLE V — CAPITAL ACCOUNTS AND OWNERSHIP
+
+Section 5.1 — Ownership Percentage Integrity
+The aggregate of all Partners' Ownership Percentages shall at all times
+equal one hundred percent (100%), with an allowable tolerance of plus or
+minus one-half of one percent (+/- 0.5%). If the aggregate Ownership
+Percentages deviate beyond this tolerance at any quarter-end, the General
+Partner shall within five (5) business days (a) identify the source of the
+discrepancy, (b) adjust the Ownership Percentages to restore compliance,
+and (c) notify all Partners in writing of the adjustment.
+
+Section 5.2 — Capital Account Maintenance
+Each Partner's capital account shall be maintained in accordance with
+Treasury Regulation Section 1.704-1(b)(2)(iv) and shall be increased by
+contributions and income allocations and decreased by distributions and
+loss allocations. The Fund Administrator shall reconcile capital accounts
+no less frequently than quarterly.
+
+---
+This document constitutes an extract of the operative provisions of the
+Horizon Growth Partners Fund I, LP Limited Partnership Agreement. All
+capitalized terms not defined herein have the meanings ascribed to them
+in Article I of the full Agreement.

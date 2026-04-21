@@ -1,0 +1,102 @@
+[
+  {
+    "query": "Which partner has the highest distribution?",
+    "expected_chunk_contains": "Ironwood"
+  },
+  {
+    "query": "What is Ironwood's ownership percentage?",
+    "expected_chunk_contains": "Ironwood"
+  },
+  {
+    "query": "Which partners received more than $500,000 in distributions?",
+    "expected_chunk_contains": "960000"
+  },
+  {
+    "query": "What is Sequoia Capital's opening balance?",
+    "expected_chunk_contains": "Sequoia"
+  },
+  {
+    "query": "How much net income was allocated to Tiger Global Fund?",
+    "expected_chunk_contains": "Tiger Global"
+  },
+  {
+    "query": "What is the closing balance for Founders Fund LP?",
+    "expected_chunk_contains": "Founders Fund"
+  },
+  {
+    "query": "Which partner has a 20% ownership stake?",
+    "expected_chunk_contains": "Founders Fund"
+  },
+  {
+    "query": "What are the total contributions across all partners?",
+    "expected_chunk_contains": "contributions"
+  },
+  {
+    "query": "Is there a partner whose distribution exceeds their net income allocation by more than 5x?",
+    "expected_chunk_contains": "Ironwood"
+  },
+  {
+    "query": "What is Benchmark Capital's distribution amount?",
+    "expected_chunk_contains": "200000"
+  },
+  {
+    "query": "Which partner has the lowest closing balance?",
+    "expected_chunk_contains": "closing_balance"
+  },
+  {
+    "query": "How many partners have ownership above 15%?",
+    "expected_chunk_contains": "ownership_pct"
+  },
+  {
+    "query": "What is Andreessen Horowitz's net income allocation?",
+    "expected_chunk_contains": "100000"
+  },
+  {
+    "query": "Are there any partners with zero contributions this period?",
+    "expected_chunk_contains": "contributions"
+  },
+  {
+    "query": "Which partner received distributions disproportionate to their ownership share?",
+    "expected_chunk_contains": "Ironwood"
+  },
+  {
+    "query": "What is the maximum distribution percentage any single partner can receive?",
+    "expected_chunk_contains": "twenty-five percent"
+  },
+  {
+    "query": "What is the preferred return rate?",
+    "expected_chunk_contains": "eight percent (8%)"
+  },
+  {
+    "query": "What tolerance is allowed for ownership percentage totals?",
+    "expected_chunk_contains": "0.5%"
+  },
+  {
+    "query": "Can distributions be non-pro-rata?",
+    "expected_chunk_contains": "General Partner"
+  },
+  {
+    "query": "What is the LP/GP profit sharing split?",
+    "expected_chunk_contains": "eighty percent (80%)"
+  },
+  {
+    "query": "What transaction amount triggers a flag?",
+    "expected_chunk_contains": "$100,000"
+  },
+  {
+    "query": "What is the concentration limit for a single position?",
+    "expected_chunk_contains": "thirty percent (30%)"
+  },
+  {
+    "query": "How many days to review flagged items?",
+    "expected_chunk_contains": "five (5) business days"
+  },
+  {
+    "query": "What are the client risk profile categories?",
+    "expected_chunk_contains": "Conservative, Moderate, Growth, and Aggressive"
+  },
+  {
+    "query": "How long must records be retained?",
+    "expected_chunk_contains": "five (5) years"
+  }
+]

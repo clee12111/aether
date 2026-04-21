@@ -1,0 +1,13 @@
+investor_id,investor_name,capital_commitment,q4_allocation_pct,q4_distribution,notes
+INV001,Sequoia Capital LP,5000000,12.5,625000,Allocation consistent with agreement
+INV002,Tiger Global Fund,3000000,7.5,225000,Possible over-allocation — review required
+INV003,Andreessen Horowitz,8000000,20.0,1600000,Consistent with fund agreement Section 4.2
+INV004,Benchmark Capital,2500000,6.25,156250,
+INV005,Founders Fund LP,4000000,10.0,400000,Q4 reconciliation complete
+INV006,Lightspeed Ventures,6000000,15.0,900000,Allocation flag: exceeds 15% cap per agreement
+INV007,General Catalyst,3500000,8.75,306250,
+INV008,Accel Partners,4500000,11.25,506250,Consistent
+INV009,Index Ventures,2000000,5.0,100000,Missing Q3 carry-forward documentation
+INV010,Khosla Ventures,3000000,7.5,225000,Allocation consistent with agreement
+INV011,NEA Fund XII,1500000,3.75,56250,Below minimum commitment threshold — flag for GP review
+INV012,Greylock Partners,5500000,13.75,756250,Allocation consistent with agreement

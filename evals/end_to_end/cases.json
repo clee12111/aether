@@ -1,0 +1,122 @@
+[
+  {
+    "case_id": "flag_5pct_deviation",
+    "goal": "Load the fund capital accounts CSV. Flag any partner whose distribution as a percentage of total distributions deviates from their ownership percentage by more than 5 percentage points.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Ironwood Ventures LLC"
+  },
+  {
+    "case_id": "flag_10pct_deviation",
+    "goal": "Load the fund capital accounts CSV. Flag any partner whose distribution share deviates from their ownership percentage by more than 10 percentage points.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Ironwood Ventures LLC"
+  },
+  {
+    "case_id": "largest_distribution",
+    "goal": "Load the fund capital accounts CSV. Identify the partner who received the largest distribution and report the amount.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 0,
+    "must_flag_partner": null
+  },
+  {
+    "case_id": "ownership_over_20pct",
+    "goal": "Load the fund capital accounts CSV. Check if any partner has an ownership percentage exceeding 20%. Flag them if so.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Sequoia Capital LP"
+  },
+  {
+    "case_id": "reconcile_total_distributions",
+    "goal": "Load the fund capital accounts CSV. Sum all distributions and verify that each partner's closing balance equals opening_balance - distributions + net_income_allocation. Flag any discrepancies.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 0,
+    "must_flag_partner": null
+  },
+  {
+    "case_id": "distribution_exceeds_opening",
+    "goal": "Load the fund capital accounts CSV. Flag any partner whose distribution exceeds 30% of their opening balance.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Ironwood Ventures LLC"
+  },
+  {
+    "case_id": "ironwood_anomaly",
+    "goal": "Load the fund capital accounts CSV. Analyze Ironwood Ventures LLC specifically. Flag any anomalies in their distribution relative to ownership or net income.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv"],
+    "expected_verdict": "any",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Ironwood Ventures LLC"
+  },
+  {
+    "case_id": "quarterly_cap_check",
+    "goal": "Using the fund capital accounts CSV and the fund agreement, check if any partner's distribution exceeds the 25% quarterly distribution cap specified in Section 4.2 of the fund agreement. Flag any violations.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv", "data/demo/fund_agreement.txt"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Ironwood Ventures LLC"
+  },
+  {
+    "case_id": "small_holder_cap",
+    "goal": "Using the fund capital accounts CSV and the fund agreement, verify that partners with ownership below 15% did not receive distributions exceeding 1.5x their ownership percentage of total distributions, as required by Section 4.3. Flag any violations.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv", "data/demo/fund_agreement.txt"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Ironwood Ventures LLC"
+  },
+  {
+    "case_id": "ownership_tolerance_check",
+    "goal": "Using the fund capital accounts CSV and the fund agreement, check if total ownership percentages sum to 100% within the 0.5% tolerance specified in Section 5.1. Flag if the total deviates beyond tolerance.",
+    "file_paths": ["data/demo/fund_capital_accounts.csv", "data/demo/fund_agreement.txt"],
+    "expected_verdict": "any",
+    "expected_flags_min": 1,
+    "must_flag_partner": null
+  },
+  {
+    "case_id": "duplicate_transactions",
+    "goal": "Load the multi-quarter transaction log. Find any duplicate transactions — rows with the same date, partner, type, and amount. Flag each duplicate found.",
+    "file_paths": ["data/demo/multi_quarter_transactions.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 2,
+    "must_flag_partner": null
+  },
+  {
+    "case_id": "suspicious_fees",
+    "goal": "Load the multi-quarter transaction log. Flag any fees that are positive (fees should always be negative/deducted). These are suspicious and may indicate data entry errors or fraud.",
+    "file_paths": ["data/demo/multi_quarter_transactions.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Founders Fund LP"
+  },
+  {
+    "case_id": "allocation_mismatch",
+    "goal": "Load the multi-quarter transaction log. Identify any income allocations where the amount does not match the partner's expected share based on ownership percentages. Flag mismatches.",
+    "file_paths": ["data/demo/multi_quarter_transactions.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": "Ironwood Ventures LLC"
+  },
+  {
+    "case_id": "compliance_threshold_flag",
+    "goal": "Using the compliance policy and the multi-quarter transaction log, flag all transactions that exceed the $100,000 reporting threshold defined in Section 2.1 of the compliance policy.",
+    "file_paths": ["data/demo/compliance_policy.txt", "data/demo/multi_quarter_transactions.csv"],
+    "expected_verdict": "pass",
+    "expected_flags_min": 1,
+    "must_flag_partner": null
+  },
+  {
+    "case_id": "compliance_review",
+    "goal": "Using the compliance policy and the multi-quarter transaction log, review all transactions for any violations of the compliance policy. Flag suspicious fees, duplicate transactions, and any transactions exceeding the $100,000 threshold.",
+    "file_paths": ["data/demo/compliance_policy.txt", "data/demo/multi_quarter_transactions.csv"],
+    "expected_verdict": "any",
+    "expected_flags_min": 1,
+    "must_flag_partner": null
+  }
+]

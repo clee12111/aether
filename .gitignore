@@ -1,0 +1,47 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Test and cache
+.pytest_cache/
+.mypy_cache/
+
+# IDE and tooling
+.vscode/
+.idea/
+.claude/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Local data stores
+data/uploads/*
+!data/uploads/.gitkeep
+chroma_db/
+*.db
+*.sqlite
+*.sqlite3
+
+# Runtime artifacts
+run*.txt
+*.log
+traces/
+
+# Personal notes and work-in-progress
+memory/
+progress.md
+Aether-backup/

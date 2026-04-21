@@ -1,0 +1,31 @@
+[project]
+name = "aether"
+version = "0.1.0"
+description = "Workflow Reasoning Engine"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic",
+    "pydantic",
+    "pydantic-settings",
+    "chromadb",
+    "sentence-transformers",
+    "rank-bm25",
+    "flashrank",
+    "fastapi",
+    "uvicorn",
+    "streamlit",
+    "duckdb",
+    "pdfplumber",
+    "openpyxl",
+    "pandas",
+    "rich",
+    "pytest",
+    "python-dotenv",
+]
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["aether*"]

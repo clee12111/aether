@@ -1,0 +1,105 @@
+HORIZON WEALTH ADVISORS, LLC
+REGISTERED INVESTMENT ADVISER — COMPLIANCE POLICIES AND PROCEDURES
+Policy Effective Date: January 1, 2024
+Last Reviewed: March 15, 2024
+
+SECTION 1 — PURPOSE AND SCOPE
+
+1.1 This Compliance Manual establishes the policies and procedures
+governing the investment advisory activities of Horizon Wealth Advisors,
+LLC ("the Firm"), a registered investment adviser under the Investment
+Advisers Act of 1940. These policies apply to all advisory personnel,
+supervised persons, and associated persons of the Firm.
+
+1.2 The Chief Compliance Officer ("CCO") is responsible for the
+administration, interpretation, and enforcement of these policies and
+shall conduct no fewer than one annual review of their adequacy and
+effectiveness pursuant to Rule 206(4)-7.
+
+SECTION 2 — TRANSACTION MONITORING
+
+2.1 All client account transactions shall be subject to automated
+surveillance. Any single transaction with a gross value exceeding One
+Hundred Thousand Dollars ($100,000) shall be automatically flagged for
+review by the Compliance Department.
+
+2.2 Flagged transactions shall be classified as follows:
+    (a) Level 1 — transactions between $100,000 and $250,000: review
+        within three (3) business days;
+    (b) Level 2 — transactions between $250,001 and $500,000: review
+        within two (2) business days with CCO notification;
+    (c) Level 3 — transactions exceeding $500,000: same-day review with
+        mandatory CCO sign-off before settlement.
+
+2.3 The Compliance Department shall maintain a transaction monitoring log
+documenting the date of the flag, the reviewing officer, the disposition
+(approved, escalated, or rejected), and any corrective action taken.
+
+SECTION 3 — CONCENTRATION LIMITS
+
+3.1 No individual client portfolio under the Firm's management shall hold
+a position in any single security, fund, or issuer exceeding thirty
+percent (30%) of the portfolio's total market value at the time of trade
+execution.
+
+3.2 If market appreciation causes a position to exceed the 30% threshold
+after execution, the portfolio manager shall rebalance the position to
+below 30% within fifteen (15) business days, unless the client has
+provided a signed written waiver pursuant to Section 3.4.
+
+3.3 Sector concentration shall not exceed fifty percent (50%) of any
+client portfolio. For purposes of this section, sectors are defined by
+the Global Industry Classification Standard (GICS) at the sector level.
+
+3.4 A client may waive the concentration limits of Sections 3.1 and 3.2
+by executing a Concentration Risk Acknowledgment form, which must
+disclose: (a) the specific position and percentage; (b) the risks of
+concentrated holdings; and (c) the client's acknowledgment that the
+position deviates from the Firm's standard investment guidelines.
+
+SECTION 4 — SUITABILITY AND BEST INTEREST
+
+4.1 All investment recommendations and discretionary trades must be
+suitable for the client based on the client's documented investment
+profile, which includes: risk tolerance, investment time horizon,
+liquidity needs, tax status, and stated investment objectives.
+
+4.2 Advisory personnel shall not execute a trade that conflicts with a
+client's stated risk profile without prior written client approval. Risk
+profiles are categorized as: Conservative, Moderate, Growth, and
+Aggressive. A trade is considered conflicting if the security's risk
+classification exceeds the client's profile category by two or more
+levels.
+
+4.3 The Firm shall review client investment profiles no less frequently
+than annually or upon notification of a material change in the client's
+financial circumstances.
+
+SECTION 5 — FLAGGED ITEM REVIEW AND REPORTING
+
+5.1 All items flagged by the compliance monitoring systems described in
+Sections 2 through 4 must be reviewed and dispositioned within five (5)
+business days of the flag date, unless a shorter review period is
+specified in the applicable section.
+
+5.2 The CCO shall prepare a monthly Compliance Summary Report
+documenting: (a) total number of flags generated; (b) number resolved
+within the required timeframe; (c) number of escalations; (d) any
+regulatory reporting obligations triggered; and (e) remedial actions
+taken.
+
+5.3 All compliance records, including flagged item dispositions, review
+memoranda, and client waivers, shall be retained for a minimum of five
+(5) years from the date of creation in accordance with Rule 204-2 of
+the Investment Advisers Act.
+
+5.4 Any pattern of repeated flags involving the same client account,
+security, or advisory personnel shall be escalated to the CCO for
+enhanced review. Three or more flags within a rolling sixty (60) day
+period shall trigger a mandatory compliance inquiry.
+
+---
+This document is the property of Horizon Wealth Advisors, LLC and
+constitutes confidential compliance material. Distribution outside the
+Firm requires prior written authorization from the Chief Compliance
+Officer.

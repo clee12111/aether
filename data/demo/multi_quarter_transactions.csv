@@ -1,0 +1,41 @@
+transaction_id,date,partner_name,transaction_type,amount,quarter,notes
+TXN-001,2024-01-15,Sequoia Capital LP,contribution,500000,Q1,Annual capital call - tranche 1
+TXN-002,2024-01-15,Tiger Global Fund,contribution,300000,Q1,Annual capital call - tranche 1
+TXN-003,2024-01-20,Andreessen Horowitz,contribution,200000,Q1,Annual capital call - tranche 1
+TXN-004,2024-01-20,Benchmark Capital,contribution,200000,Q1,Annual capital call - tranche 1
+TXN-005,2024-01-22,Founders Fund LP,contribution,400000,Q1,Annual capital call - tranche 1
+TXN-006,2024-01-22,Ironwood Ventures LLC,contribution,240000,Q1,Annual capital call - tranche 1
+TXN-007,2024-02-10,Sequoia Capital LP,fee,-12500,Q1,Management fee 0.25%
+TXN-008,2024-02-10,Tiger Global Fund,fee,-7500,Q1,Management fee 0.25%
+TXN-009,2024-02-10,Andreessen Horowitz,fee,-5000,Q1,Management fee 0.25%
+TXN-010,2024-02-10,Benchmark Capital,fee,-5000,Q1,Management fee 0.25%
+TXN-011,2024-03-31,Sequoia Capital LP,income_allocation,125000,Q1,Q1 realized gains allocation
+TXN-012,2024-03-31,Tiger Global Fund,income_allocation,75000,Q1,Q1 realized gains allocation
+TXN-013,2024-03-31,Founders Fund LP,income_allocation,100000,Q1,Q1 realized gains allocation
+TXN-014,2024-03-31,Ironwood Ventures LLC,income_allocation,60000,Q1,Q1 realized gains allocation
+TXN-015,2024-04-15,Sequoia Capital LP,distribution,156250,Q2,Q1 preferred return distribution
+TXN-016,2024-04-15,Tiger Global Fund,distribution,56250,Q2,Q1 preferred return distribution
+TXN-017,2024-04-15,Andreessen Horowitz,distribution,62500,Q2,Q1 preferred return distribution
+TXN-018,2024-04-15,Benchmark Capital,distribution,50000,Q2,Q1 preferred return distribution
+TXN-019,2024-04-15,Founders Fund LP,distribution,100000,Q2,Q1 preferred return distribution
+TXN-020,2024-04-15,Ironwood Ventures LLC,distribution,240000,Q2,Q1 preferred return distribution
+TXN-021,2024-05-01,Founders Fund LP,fee,8500,Q2,Suspicious fee reversal - negative expense
+TXN-022,2024-06-30,Sequoia Capital LP,income_allocation,130000,Q2,Q2 realized gains allocation
+TXN-023,2024-06-30,Tiger Global Fund,income_allocation,78000,Q2,Q2 realized gains allocation
+TXN-024,2024-06-30,Benchmark Capital,income_allocation,52000,Q2,Q2 realized gains allocation
+TXN-025,2024-06-30,Ironwood Ventures LLC,income_allocation,95000,Q2,Q2 realized gains — does not match 12% ownership
+TXN-026,2024-07-10,Sequoia Capital LP,distribution,156250,Q3,Q2 preferred return distribution
+TXN-027,2024-07-10,Tiger Global Fund,distribution,56250,Q3,Q2 preferred return distribution
+TXN-028,2024-07-10,Founders Fund LP,distribution,100000,Q3,Q2 preferred return distribution
+TXN-029,2024-07-10,Ironwood Ventures LLC,distribution,240000,Q3,Q2 preferred return distribution
+TXN-030,2024-09-30,Andreessen Horowitz,income_allocation,50000,Q3,Q3 realized gains allocation
+TXN-031,2024-09-30,Benchmark Capital,income_allocation,50000,Q3,Q3 realized gains allocation
+TXN-032,2024-10-15,Sequoia Capital LP,distribution,156250,Q4,Q3 preferred return distribution
+TXN-033,2024-10-15,Tiger Global Fund,distribution,56250,Q4,Q3 preferred return distribution
+TXN-034,2024-10-15,Andreessen Horowitz,distribution,62500,Q4,Q3 preferred return distribution
+TXN-035,2024-10-15,Founders Fund LP,distribution,100000,Q4,Q3 preferred return distribution
+TXN-036,2024-10-15,Ironwood Ventures LLC,distribution,240000,Q4,Q3 preferred return distribution
+TXN-037,2024-10-15,Ironwood Ventures LLC,distribution,240000,Q4,Q3 preferred return distribution
+TXN-038,2024-11-05,Benchmark Capital,contribution,200000,Q4,Annual capital call - tranche 1
+TXN-039,2024-11-05,Benchmark Capital,contribution,200000,Q4,Annual capital call - tranche 1
+TXN-040,2024-12-31,Founders Fund LP,income_allocation,100000,Q4,Q4 realized gains allocation
