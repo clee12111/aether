@@ -74,7 +74,7 @@ def test_e2e(runtime, case, request):
     # -- Must-flag partner: search executor output --
     partner = case.get("must_flag_partner")
     if partner:
-        output_text = json.dumps(output)
+        output_text = json.dumps(output, default=str)
         assert partner in output_text, (
             f"[{case['case_id']}] expected '{partner}' in executor output"
         )

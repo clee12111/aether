@@ -20,7 +20,7 @@ class WriteReportTool(BaseTool):
 
         if fmt == "json":
             out_path = _UPLOAD_DIR / f"{title}.json"
-            out_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+            out_path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
         else:
             out_path = _UPLOAD_DIR / f"{title}.txt"
             out_path.write_text(str(results), encoding="utf-8")
