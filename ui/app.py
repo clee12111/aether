@@ -56,6 +56,28 @@ with tab_run:
 
             st.markdown(f"**Summary:** {critique.get('summary', '—')}")
 
+            # Download button for the final report file
+            _report_path = None
+            _report_fmt = "json"
+            _executor_output = result.get("output", {})
+            for _step_id, _step_val in _executor_output.items():
+                if isinstance(_step_val, dict) and "path" in _step_val and "format" in _step_val:
+                    _report_path = _step_val["path"]
+                    _report_fmt = _step_val.get("format", "json")
+            if _report_path:
+                _rp = Path(_report_path)
+                if _rp.exists():
+                    _mime = "application/json" if _report_fmt == "json" else "text/plain"
+                    st.download_button(
+                        label="Download Report",
+                        data=_rp.read_bytes(),
+                        file_name=_rp.name,
+                        mime=_mime,
+                    )
+                else:
+                    import logging
+                    logging.getLogger(__name__).warning("Report file not found: %s", _report_path)
+
             # Plan steps
             st.subheader("Plan")
             plan = result.get("plan", {})
@@ -113,10 +135,10 @@ with tab_trace:
 
 with tab_eval:
     st.subheader("Evaluation Results")
-    st.caption("Hardcoded for now — will wire live eval runs later.")
+    st.caption("Results as of most recent eval run. See docs/eval_analysis.md for detailed breakdown.")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Retrieval precision@3", "15/15 (100%)", delta="passing")
+        st.metric("Retrieval precision@5", "24/25 (96%)", delta="passing")
     with col2:
-        st.metric("E2E pass rate", "10/10 (100%)", delta="passing")
+        st.metric("E2E pass rate", "10/15 (67%)")
