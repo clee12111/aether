@@ -43,11 +43,11 @@ TRACE STORE        every LLM call + tool call --> SQLite (WAL mode)
 | Eval suite | Cases | Result | Notes |
 |---|---|---|---|
 | Retrieval precision@5 | 25 | 24/25 (96%) | stdev 0.00 across 5 runs; pipeline is deterministic |
-| End-to-end | 15 | 11/15 (73%) | Reliable floor. Full run results fluctuate 10-13 due to planner non-determinism; see docs/eval_analysis.md |
+| End-to-end | 15 | 13/15 (87%) | Reliable floor. Full run results fluctuate 13-14; see docs/eval_analysis.md |
 
 Cost per end-to-end run: ~$0.65 (Opus planner + Haiku critic; executor is LLM-free).
 
-The one persistent retrieval failure is a cross-document query where single-query retrieval cannot surface chunks from two different document types simultaneously. The five end-to-end failures break down into: 1 test harness bug (JSON serialization, trivial fix), 3 planner SQL schema errors (schema grounding gap), and 1 non-deterministic executor behavior (flag attribution). Full analysis in [`docs/eval_analysis.md`](docs/eval_analysis.md).
+The one persistent retrieval failure is a cross-document query where single-query retrieval cannot surface chunks from two different document types simultaneously. The two remaining end-to-end failures are: 1 planner SQL hallucination (invents a table that doesn't exist) and 1 intermittent critic over-escalation. Full analysis in [`docs/eval_analysis.md`](docs/eval_analysis.md).
 
 ## Key design decisions
 
