@@ -61,3 +61,19 @@
 **The fix.** Added `_build_schema_block()` to the planner module. It reads the actual file paths and uses pandas to extract column names, then injects them into the user prompt as a structured block: "AVAILABLE FILES AND SCHEMAS: fund_capital_accounts.csv — Columns: partner_name, ownership_pct, distributions, ..." with an explicit instruction: "Do NOT invent table names, file names, or column names."
 
 **The lesson.** The model can't use information it doesn't have. Schema grounding fixed what prompt engineering couldn't.
+
+---
+
+### Story 5. Silent pass, empty output
+
+**Symptom.** Every e2e test case passed. The Critic returned "pass" verdicts with high confidence. But every report file written to `data/uploads/` was `{}`. An empty JSON object. The pipeline was reporting success while delivering nothing.
+
+**What I thought first.** I assumed WriteReportTool was broken -- maybe a path issue, or the JSON serialization was silently swallowing an error. I read the tool code and it looked correct: it received `args["results"]`, serialized it, wrote it to disk. Simple.
+
+**The investigation.** I queried the trace store for a recent run and looked at the exact args passed to `write_report`. The `results` key was missing entirely. The executor injects upstream step outputs under the key `prior_results`, but WriteReportTool was looking for `results`. Since `args.get("results", {})` returns `{}` when the key is absent, the tool wrote an empty dict to disk without raising any error. No crash, no warning, no indication that anything was wrong.
+
+**The real cause.** A key mismatch between the executor and the tool. The executor passes upstream data as `prior_results`. WriteReportTool read `args.get("results", {})`. The key never matched, so every report was silently empty. The Critic validated against the in-memory executor state, which contained real results. The tests validated verdicts and flag counts, also from in-memory state. Nobody checked the file on disk.
+
+**The fix.** One line: `results = args.get("results") or args.get("prior_results", {})`. Two characters of substance -- the `or` fallback.
+
+**The lesson.** Validate the actual deliverable, not the steps that produced it. Tests pass when they find what they measure. If you don't measure the artifact the user actually receives, your tests are telling you something other than "it works."
