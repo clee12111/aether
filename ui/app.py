@@ -141,4 +141,4 @@ with tab_eval:
     with col1:
         st.metric("Retrieval precision@5", "24/25 (96%)", delta="passing")
     with col2:
-        st.metric("E2E pass rate", "11/15 (73%)")
+        st.metric("E2E pass rate", "13/15 (87%)")
