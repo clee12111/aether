@@ -8,7 +8,7 @@ Financial data work is messy. A compliance analyst gets a pile of CSVs, a fund a
 
 The system runs a planner/executor/critic loop over a hybrid RAG layer. The **planner** (Claude Opus) reads the goal and retrieved context, then generates a structured execution plan with tool calls. The **executor** dispatches those tool calls (load data into DuckDB, run SQL, flag items, write reports) with no LLM in the loop. The **critic** (Claude Haiku) compares the output against the original goal and returns a structured verdict. If the verdict is "partial," the system re-plans with the critic's feedback, up to 2 revision cycles. If the verdict is "fail," it escalates to a human review queue. Every LLM call and tool call is recorded in a SQLite trace store.
 
-The engine is domain-agnostic. Finance is the demo domain, but the only finance-specific content lives in `aether/prompts/finance/` (few-shot examples) and `data/demo/` (sample documents). Swap `PROMPTS_DIR` to a different directory, provide different documents, and the engine works the same way. See [`aether/prompts/README.md`](aether/prompts/README.md) for details.
+The engine is domain-agnostic. Finance is the demo domain, but the only finance-specific content lives in `aether/prompts/finance/` (few-shot examples) and `data/demo/` (sample documents). Swap `PROMPTS_DIR` to a different directory, provide different documents, and the engine works the same way. See [`aether/prompts/README.md`](aether/prompts/README.md) for details. Builds on patterns from a prior crypto tax tooling project (private). The engine/domain separation in Aether generalizes that earlier work.
 
 ## Architecture
 
@@ -114,6 +114,13 @@ docs/              Eval gap analysis and project documentation
 
 ## Status
 
-Weeks 1-6 complete: ingestion layer, hybrid RAG with retrieval evals, planner/executor/critic agent loop, 40-case eval suite, Streamlit UI with run viewer and trace explorer.
+Foundational implementation complete: ingestion layer (CSV/PDF/Excel/TXT), hybrid RAG with retrieval evals, planner/executor/critic agent loop, 40-case eval suite, Streamlit UI with run viewer and trace explorer. Built solo over 6 weeks.
 
-Planned: ComplianceOS — a thin product layer on top of Aether for RIA compliance workflows. Same engine, separate surface.
+### Next: deeper retrieval
+
+The persistent failure case in the current eval is a cross-document query that single-query retrieval cannot surface — chunks from two document types are both relevant, and no single query retrieves both. This is the motivating problem for the next iteration:
+
+- **Agentic retrieval.** Planner-driven query decomposition: the LLM rewrites the goal into sub-queries, retrieves per sub-query, and merges results.
+- **Query-aware reranking.** Replacing the static reranker with one that considers the goal context, not just chunk-query similarity.
+- **Retrieval evaluation as a first-class harness.** Beyond precision@5 — measuring recall on cross-document queries, reranker contribution (ablation), failure cause attribution.
+- **Forensic documentation as I go.** Same discipline applied to the trading bot project. Every retrieval failure mode documented with reproduction steps and the eventual fix.
