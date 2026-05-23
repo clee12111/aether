@@ -110,11 +110,31 @@ def _build_prompt(state: LoopState, file_paths: list[str] | None = None) -> str:
     )
 
 
+def _extract_json_object(text: str) -> str:
+    """Find the outermost {...} block in text, handling nested braces."""
+    start = text.find("{")
+    if start == -1:
+        return text
+    depth = 0
+    for i, ch in enumerate(text[start:], start=start):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    # Unclosed brace — return from start to end
+    return text[start:]
+
+
 def _parse_action(raw: str) -> AgentAction:
     text = raw.strip()
+    # 1. Strip markdown fences first
     m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
     if m:
         text = m.group(1).strip()
+    # 2. Extract the outermost JSON object (handles preamble prose from local models)
+    text = _extract_json_object(text)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
