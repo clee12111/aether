@@ -6,6 +6,7 @@ import re
 import time
 
 from aether.agents.llm_client import chat
+from aether.agents.planner import _build_schema_block
 from aether.config import settings
 from aether.models.agent_action import AgentAction, LoopState
 from aether.models.trace import TraceEvent
@@ -62,7 +63,19 @@ def _summarise_observation(output: dict, error: str | None) -> str:
     return s[:200] + ("..." if len(s) > 200 else "")
 
 
-def _build_prompt(state: LoopState) -> str:
+def _build_prompt(state: LoopState, file_paths: list[str] | None = None) -> str:
+    # Schema block — exact file paths + column headers so the model can call
+    # load_data correctly. Sourced from planner._build_schema_block (same logic).
+    if file_paths:
+        raw_schema = _build_schema_block(file_paths)
+        schema_block = (
+            f"{raw_schema}\n"
+            "Note: load_data requires BOTH 'file_path' (exact path from the list above)"
+            " AND 'table_name' (any short name you choose; used in run_sql queries).\n"
+        )
+    else:
+        schema_block = ""
+
     # Initial context — first chunk up to 400 chars, count the rest
     if state.initial_context:
         first = state.initial_context[0]
@@ -90,6 +103,7 @@ def _build_prompt(state: LoopState) -> str:
 
     return (
         f"GOAL: {state.goal}\n\n"
+        f"{schema_block}\n"
         f"{ctx_block}\n"
         f"{history_block}\n"
         f"What is the SINGLE next action? Output AgentAction JSON only."
@@ -113,17 +127,24 @@ class LoopAgent:
         self.settings = settings
         self._store = TraceStore(settings.db_path)
 
-    def decide(self, state: LoopState) -> tuple[AgentAction, int, int]:
+    def decide(
+        self,
+        state: LoopState,
+        file_paths: list[str] | None = None,
+    ) -> tuple[AgentAction, int, int]:
         """Ask the model for the next single AgentAction.
 
         Returns (AgentAction, input_tokens, output_tokens).
-        Retries up to settings.max_retries on validation failure.
+        Retries up to settings.max_retries on both JSON parse failures and
+        empty-tool responses (is_final=False with tool="").
         All LLM trace events are written here.
         """
         step_index = len(state.steps)
         step_id = f"rao_step_{step_index}"
-        user_prompt = _build_prompt(state)
+        user_prompt = _build_prompt(state, file_paths=file_paths)
         last_error: str | None = None
+        last_bad_action: AgentAction | None = None
+        last_in_tok, last_out_tok = 0, 0
 
         provider = self.settings.planner_provider
         model = (self.settings.planner_model_local if provider == "ollama"
@@ -162,9 +183,35 @@ class LoopAgent:
             )
             duration_ms = int((time.time() - t0) * 1000)
             raw = result.text
+            last_in_tok, last_out_tok = result.input_tokens, result.output_tokens
 
             try:
                 action = _parse_action(raw)
+
+                # Empty-tool guard: is_final=False with no tool name is not a valid
+                # decision. Feed the error back so the model can self-correct.
+                if not action.is_final and not action.tool.strip():
+                    last_error = (
+                        "Your last response had an empty 'tool' field with is_final=false. "
+                        "You MUST either name a valid tool "
+                        "(load_data, run_sql, flag_item, write_report, retrieve_context) "
+                        "or set is_final=true."
+                    )
+                    last_bad_action = action
+                    logger.warning(
+                        "Step %d attempt %d: empty tool with is_final=False — retrying",
+                        step_index, attempt,
+                    )
+                    self._store.write_event(TraceEvent.for_validation_error(
+                        run_id=state.run_id,
+                        agent="loop_agent",
+                        attempt=attempt,
+                        error=last_error,
+                        raw_response=raw[:500],
+                        step_id=step_id,
+                    ))
+                    continue
+
                 logger.info(
                     "Step %d decision: tool=%r is_final=%s", step_index, action.tool, action.is_final
                 )
@@ -193,6 +240,15 @@ class LoopAgent:
                     raw_response=raw[:500],
                     step_id=step_id,
                 ))
+
+        # Retries exhausted. If it was an empty-tool spin, return the last bad
+        # action so the loop logs it as a failed step rather than crashing.
+        if last_bad_action is not None:
+            logger.warning(
+                "Step %d: returning empty-tool action after %d retries — loop will log as failed step",
+                step_index, self.settings.max_retries,
+            )
+            return last_bad_action, last_in_tok, last_out_tok
 
         raise ValueError(
             f"LoopAgent failed to produce a valid AgentAction after "

@@ -32,7 +32,19 @@ def _count_flagged_items(output: dict) -> int:
 
 @pytest.fixture(scope="module")
 def runtime():
-    return AetherRuntime()
+    # eval_mode=True: uses EphemeralClient (in-memory Chroma) so dev/scratch
+    # runs on the persistent ./chroma_db never pollute eval retrieval.
+    return AetherRuntime(eval_mode=True)
+
+
+@pytest.fixture(autouse=True)
+def reset_retriever(runtime):
+    # Per-case isolation: wipe index state before each test so no documents
+    # leak from the previous case's corpus into this one's retrieval.
+    # NOTE: prior runs of this suite without this fixture had 448 orphan chunks
+    # polluting Chroma — those numbers are suspect and should be re-run.
+    runtime.retriever.reset_index()
+    yield
 
 
 @pytest.mark.parametrize(

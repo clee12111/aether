@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS human_review_queue (
 
 
 class AetherRuntime:
-    def __init__(self, extra_tools: dict | None = None) -> None:
+    def __init__(self, extra_tools: dict | None = None, eval_mode: bool = False) -> None:
         self.loader = DocumentLoader()
-        self.retriever = HybridRetriever()
+        self.retriever = HybridRetriever(ephemeral=eval_mode)
         retrieve_tool = RetrieveContextTool(self.retriever)
         runtime_tools = {"retrieve_context": retrieve_tool}
         if extra_tools:
@@ -96,7 +96,7 @@ class AetherRuntime:
             step_id = f"rao_step_{step_index}"
 
             # 4a. Decide
-            action, in_tok, out_tok = loop_agent.decide(state)
+            action, in_tok, out_tok = loop_agent.decide(state, file_paths=file_paths)
             logger.info(
                 "Step %d: tool=%r is_final=%s in_tok=%d out_tok=%d",
                 step_index, action.tool, action.is_final, in_tok, out_tok,

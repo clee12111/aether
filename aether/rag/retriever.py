@@ -77,6 +77,7 @@ class HybridRetriever:
         dense_top_k: int | None = None,
         bm25_top_k: int | None = None,
         rerank_top_k: int | None = None,
+        ephemeral: bool = False,
     ) -> None:
         self.collection_name = collection_name or settings.chroma_collection
         self.dense_top_k = dense_top_k or settings.dense_top_k
@@ -91,9 +92,15 @@ class HybridRetriever:
         # flashrank is loaded lazily in _rerank()
         self._ranker = None
 
-        logger.info("Opening Chroma store at: %s", settings.chroma_path)
         import chromadb
-        self._chroma = chromadb.PersistentClient(path=settings.chroma_path)
+        if ephemeral:
+            # In-memory store — no disk I/O, no cross-session pollution.
+            # Use for eval runs so dev scratch runs never pollute test retrieval.
+            logger.info("Using ephemeral (in-memory) Chroma store")
+            self._chroma = chromadb.EphemeralClient()
+        else:
+            logger.info("Opening Chroma store at: %s", settings.chroma_path)
+            self._chroma = chromadb.PersistentClient(path=settings.chroma_path)
         self._collection = self._get_or_create_collection(self.collection_name)
 
         # In-memory BM25 state — built by index() or _warm_bm25()
@@ -156,6 +163,37 @@ class HybridRetriever:
             len(self._bm25_chunks),
             col.name,
         )
+
+    def reset_index(self) -> None:
+        """Clear all indexed state without unloading the encoder or reranker.
+
+        Deletes the Chroma collection and recreates it empty, then zeros all
+        in-memory BM25 state. Safe to call between eval cases to guarantee
+        per-case corpus isolation — each case retrieves only its own documents.
+
+        Works with both PersistentClient (clears disk) and EphemeralClient.
+        """
+        logger.info("reset_index: deleting collection %r", self.collection_name)
+        try:
+            self._chroma.delete_collection(self.collection_name)
+        except Exception as exc:
+            logger.warning("delete_collection(%r) failed (may not exist): %s",
+                           self.collection_name, exc)
+
+        self._collection = self._get_or_create_collection(self.collection_name)
+        count = self._collection.count()
+        if count != 0:
+            raise RuntimeError(
+                f"reset_index: collection still has {count} chunks after delete+recreate"
+            )
+
+        # Zero all in-memory BM25 and column state
+        self._bm25_chunks = []
+        self._bm25 = None
+        self._indexed_columns = set()
+        self._data_columns_re = None
+
+        logger.info("reset_index: complete — collection %r is empty", self.collection_name)
 
     # ── Query classification ─────────────────────────────────────────────────
 

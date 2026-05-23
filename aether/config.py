@@ -42,10 +42,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field(default="http://localhost:11434/v1", description="Ollama OpenAI-compatible endpoint")
 
     # local model names (used when provider == 'ollama')
-    planner_model_local: str = Field(default="phi4-mini", description="local planner model")
+    planner_model_local: str = Field(default="mistral", description="local planner model")
     critic_model_local: str = Field(default="phi4-mini", description="local critic model")
     max_retries: int = Field(
-        default=3,
+        default=2,
         ge=1,
         le=10,
         description="LLM call retry limit on validation failure",
