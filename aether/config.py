@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     )
 
     # ── Anthropic ─────────────────────────────────────────────────────────────
-    anthropic_api_key: str = Field(..., description="Anthropic API key (required)")
+    anthropic_api_key: str | None = Field(default=None, description="Anthropic API key (required only if a provider == 'anthropic')")
     claude_model: str = Field(
         default="claude-sonnet-4-6",
         description="Model ID used for all agent calls",
@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     planner_model: str = Field(default="claude-opus-4-5", description="Model for Planner agent")
     critic_model: str = Field(default="claude-haiku-4-5-20251001", description="Model for Critic agent")
     chat_model: str = Field(default="claude-sonnet-4-6", description="Model for Chat interface")
+
+    # ── Provider routing ──────────────────────────────────────────────────────
+    planner_provider: str = Field(default="ollama", description="planner: 'ollama' or 'anthropic'")
+    critic_provider: str = Field(default="ollama", description="critic: 'ollama' or 'anthropic'")
+    ollama_base_url: str = Field(default="http://localhost:11434/v1", description="Ollama OpenAI-compatible endpoint")
+
+    # local model names (used when provider == 'ollama')
+    planner_model_local: str = Field(default="phi4-mini", description="local planner model")
+    critic_model_local: str = Field(default="phi4-mini", description="local critic model")
     max_retries: int = Field(
         default=3,
         ge=1,

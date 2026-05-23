@@ -8,8 +8,7 @@ import time
 import uuid
 from pathlib import Path
 
-import anthropic
-
+from aether.agents.llm_client import chat
 from aether.config import settings
 from aether.models.chunk import Chunk
 from aether.models.plan import ExecutionPlan
@@ -65,7 +64,7 @@ SYSTEM_PROMPT = _load_system_prompt()
 
 class PlannerAgent:
     def __init__(self) -> None:
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.settings = settings
         self._store = TraceStore(settings.db_path)
 
     def run(
@@ -85,26 +84,33 @@ class PlannerAgent:
             if attempt > 1:
                 prompt += f"\n\nYour last response failed validation: {last_error}\nFix it and return valid JSON only."
 
-            logger.info("Planner calling API (attempt %d/%d)", attempt, settings.max_retries)
+            provider = self.settings.planner_provider
+            model = (self.settings.planner_model_local if provider == "ollama"
+                     else self.settings.planner_model)
+
+            logger.info("Planner calling API (attempt %d/%d) provider=%s model=%s",
+                        attempt, self.settings.max_retries, provider, model)
             self._store.write_event(TraceEvent.for_llm_call(
                 run_id=run_id,
                 agent="planner",
-                model=settings.planner_model,
+                model=model,
                 system_prompt=SYSTEM_PROMPT,
                 user_prompt=prompt,
                 attempt=attempt,
             ))
 
             t0 = time.time()
-            response = self._client.messages.create(
-                model=settings.planner_model,
-                max_tokens=4096,
+            result = chat(
+                provider=provider,
+                model=model,
                 system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+                user=prompt,
+                settings=self.settings,
+                max_tokens=4096,
             )
             duration_ms = int((time.time() - t0) * 1000)
-            raw = response.content[0].text
-            logger.debug("Tokens: %d in / %d out", response.usage.input_tokens, response.usage.output_tokens)
+            raw = result.text
+            logger.debug("Tokens: %d in / %d out", result.input_tokens, result.output_tokens)
 
             try:
                 plan = _parse(raw, run_id)
@@ -113,9 +119,9 @@ class PlannerAgent:
                     run_id=run_id,
                     agent="planner",
                     event_type="llm_response",
-                    model=settings.planner_model,
-                    input_tokens=response.usage.input_tokens,
-                    output_tokens=response.usage.output_tokens,
+                    model=model,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens,
                     duration_ms=duration_ms,
                     payload={"raw_text": raw[:1000]},
                     attempt=attempt,

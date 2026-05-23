@@ -7,8 +7,7 @@ import time
 import uuid
 from pathlib import Path
 
-import anthropic
-
+from aether.agents.llm_client import chat
 from aether.config import settings
 from aether.models.critique import CritiqueResult
 from aether.models.plan import ExecutionPlan
@@ -66,7 +65,7 @@ SYSTEM_PROMPT = _load_system_prompt()
 
 class CriticAgent:
     def __init__(self) -> None:
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.settings = settings
         self._store = TraceStore(settings.db_path)
 
     def run(
@@ -90,25 +89,32 @@ class CriticAgent:
             prompt = user_prompt if attempt == 1 else (
                 user_prompt + f"\n\nPrevious response failed validation: {last_error}\nFix and return valid JSON only."
             )
-            logger.info("Critic calling API (attempt %d/%d)", attempt, settings.max_retries)
+            provider = self.settings.critic_provider
+            model = (self.settings.critic_model_local if provider == "ollama"
+                     else self.settings.critic_model)
+
+            logger.info("Critic calling API (attempt %d/%d) provider=%s model=%s",
+                        attempt, self.settings.max_retries, provider, model)
             self._store.write_event(TraceEvent.for_llm_call(
                 run_id=run_id,
                 agent="critic",
-                model=settings.critic_model,
+                model=model,
                 system_prompt=SYSTEM_PROMPT,
                 user_prompt=prompt,
                 attempt=attempt,
             ))
 
             t0 = time.time()
-            response = self._client.messages.create(
-                model=settings.critic_model,
-                max_tokens=1500,
+            llm_result = chat(
+                provider=provider,
+                model=model,
                 system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+                user=prompt,
+                settings=self.settings,
+                max_tokens=1500,
             )
             duration_ms = int((time.time() - t0) * 1000)
-            raw = response.content[0].text
+            raw = llm_result.text
 
             try:
                 text = raw.strip()
@@ -121,9 +127,9 @@ class CriticAgent:
                     run_id=run_id,
                     agent="critic",
                     event_type="llm_response",
-                    model=settings.critic_model,
-                    input_tokens=response.usage.input_tokens,
-                    output_tokens=response.usage.output_tokens,
+                    model=model,
+                    input_tokens=llm_result.input_tokens,
+                    output_tokens=llm_result.output_tokens,
                     duration_ms=duration_ms,
                     payload={"raw_text": raw[:1000]},
                     attempt=attempt,

@@ -5,6 +5,7 @@ description = "Workflow Reasoning Engine"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic",
+    "openai",
     "pydantic",
     "pydantic-settings",
     "chromadb",

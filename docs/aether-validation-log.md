@@ -1,0 +1,15 @@
+# Aether Validation Log
+
+Tracks where Aether's abstractions fit, created friction, or required
+extension during upgrade work. This is the generalization evidence.
+
+## Format
+**Date** | **Phase** | **Observation** | **Implication**
+
+---
+
+| 2026-05-23 | Local model infra | GPU acceleration (AMD RX 6600 XT / gfx1032) abandoned on Windows. Ollama community fork (ollama-for-amd v0.30.0) + gfx1031-gfx1032 rocblas libs installed correctly, but Ollama GPU discovery returns initial_count=0, total_vram=0B — only CPU detected. Known Windows-RDNA2 ROCm limitation, not a config error. Root cause of session instability was actually a near-full disk (532MB free), now cleared to 37GB. | Run local models on CPU (~15 tok/s, acceptable for dev/eval). GPU path deferred to a future WSL2/Linux setup as a separate project. Do not retry Windows ROCm. |
+
+| 2025-05-23 | Cleanup/Baseline | flag_10pct_deviation e2e case fails: one-shot planner generates a plan that calls flag_item on all 6 rows instead of filtering to >10pp deviation first via run_sql. Critic correctly returns "fail" (loop working as designed). Root cause: planner reasoning failure, not a tool bug. | Fix deferred to RAO loop — per-step observation will let the model see intermediate SQL results before deciding what to flag. Do not patch the one-shot planner. |
+
+| 2026-05-24 | Local planner test | phi4-mini (planner, Ollama, CPU) produced a structurally valid ExecutionPlan on first attempt but DROPPED the flag_item step — goal said "flag them if so", model planned load_data → run_sql → write_report, omitting flagging. Plan passed Pydantic (well-formed) but is semantically incomplete (misses the goal). 81s wall-clock, ~6 tok/s output, 1002 in / 484 out tokens. | First small-model decision-quality data point: 3.8B failure mode is SEMANTIC OMISSION, not malformed output. Comparison axis for the study: Anthropic baseline expected to include flag_item. Candidate fixes to test later: (a) stronger local planner (Mistral 7B), (b) prompt scaffolding emphasizing tool completeness. Do not fix yet — collect baseline first. |
