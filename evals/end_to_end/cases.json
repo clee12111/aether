@@ -29,7 +29,7 @@
     "file_paths": ["data/demo/fund_capital_accounts.csv"],
     "expected_verdict": "pass",
     "expected_flags_min": 1,
-    "must_flag_partner": "Sequoia Capital LP"
+    "must_flag_partner": "Apex Ventures LP"
   },
   {
     "case_id": "reconcile_total_distributions",
@@ -93,7 +93,7 @@
     "file_paths": ["data/demo/multi_quarter_transactions.csv"],
     "expected_verdict": "pass",
     "expected_flags_min": 1,
-    "must_flag_partner": "Founders Fund LP"
+    "must_flag_partner": "Vanguard Equity Fund LP"
   },
   {
     "case_id": "allocation_mismatch",
