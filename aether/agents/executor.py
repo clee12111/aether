@@ -43,6 +43,56 @@ class ExecutorAgent:
 
         return state
 
+    def dispatch_one(self, tool_name: str, args: dict, run_id: str, step_id: str) -> tuple[dict, str | None]:
+        """Dispatch a single tool by name without building a full plan.
+
+        Used by the RAO loop — one tool call per iteration. A failure does NOT
+        raise; it returns ({}, error_msg) so the loop can treat it as an
+        observation and let the model reason about the failure on the next step.
+        """
+        tool = self._tools.get(tool_name)
+        if tool is None:
+            error_msg = f"Unknown tool '{tool_name}'"
+            logger.warning("dispatch_one: %s", error_msg)
+            return {}, error_msg
+
+        self._store.write_event(TraceEvent.for_tool_call(
+            run_id=run_id,
+            agent="executor",
+            tool=tool_name,
+            args=args,
+            step_id=step_id,
+        ))
+
+        t0 = time.time()
+        try:
+            result = tool.run(args)
+            duration_ms = int((time.time() - t0) * 1000)
+            logger.info("dispatch_one '%s' succeeded in %dms", tool_name, duration_ms)
+            self._store.write_event(TraceEvent(
+                run_id=run_id,
+                step_id=step_id,
+                agent="executor",
+                event_type="tool_response",
+                duration_ms=duration_ms,
+                payload={"tool": tool_name, "result": str(result)[:1000]},
+            ))
+            return result, None
+        except Exception as exc:
+            duration_ms = int((time.time() - t0) * 1000)
+            error_msg = str(exc)
+            logger.warning("dispatch_one '%s' failed: %s", tool_name, error_msg)
+            self._store.write_event(TraceEvent(
+                run_id=run_id,
+                step_id=step_id,
+                agent="executor",
+                event_type="tool_response",
+                duration_ms=duration_ms,
+                payload={"tool": tool_name},
+                error=error_msg,
+            ))
+            return {}, error_msg
+
     def _dispatch(self, step: PlanStep, args: dict, run_id: str) -> tuple[dict | None, str]:
         tool = self._tools.get(step.tool)
         if tool is None:
