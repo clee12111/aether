@@ -45,3 +45,7 @@ traces/
 memory/
 progress.md
 Aether-backup/
+
+# stray install artifacts
+$dest/
+ollama-windows-amd64/
