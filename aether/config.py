@@ -33,7 +33,6 @@ class Settings(BaseSettings):
         description="Model ID used for all agent calls",
     )
     planner_model: str = Field(default="claude-opus-4-5", description="Model for Planner agent")
-    executor_model: str = Field(default="claude-haiku-4-5-20251001", description="Model for Executor agent")
     critic_model: str = Field(default="claude-haiku-4-5-20251001", description="Model for Critic agent")
     chat_model: str = Field(default="claude-sonnet-4-6", description="Model for Chat interface")
     max_retries: int = Field(

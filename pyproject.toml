@@ -11,8 +11,6 @@ dependencies = [
     "sentence-transformers",
     "rank-bm25",
     "flashrank",
-    "fastapi",
-    "uvicorn",
     "streamlit",
     "duckdb",
     "pdfplumber",
