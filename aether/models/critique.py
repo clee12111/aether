@@ -27,13 +27,17 @@ Verdict = Literal["pass", "partial", "fail"]
 
 # Predefined flag categories. The Critic may emit any string; these are
 # the expected values used in evals and the Streamlit UI.
+# Domain-neutral: works for legal, medical, technical, and finance documents.
+# Finance-specific categories (allocation_mismatch, reconciliation_gap) are
+# in the finance fewshots (aether/prompts/finance/) — not hardcoded here.
 FlagCategory = Literal[
-    "allocation_mismatch",    # computed share deviates from the expected split
-    "missing_data",           # required field or document absent
-    "calculation_error",      # arithmetic inconsistency in the output
-    "policy_violation",       # item violates a stated rule from the reference policy document
-    "data_quality",           # input data appears malformed or suspect
-    "reconciliation_gap",     # debit/credit imbalance or unexplained difference
+    "result_mismatch",        # computed or found result deviates from expected
+    "incomplete_coverage",    # answer does not address all parts of the goal
+    "calculation_error",      # arithmetic or logical inconsistency in the output
+    "missing_data",           # required field, document, or evidence is absent
+    "policy_violation",       # item violates a stated rule or requirement
+    "data_quality",           # input data appears malformed, suspect, or unreliable
+    "unsupported_claim",      # conclusion not grounded in retrieved evidence
     "other",                  # catch-all for Critic discretion
 ]
 
@@ -71,7 +75,7 @@ class CritiqueFlag(BaseModel):
         ...,
         min_length=1,
         max_length=64,
-        description="Issue category (use FlagCategory values for the finance demo)",
+        description="Issue category (use FlagCategory values; domain pack in prompts_dir)",
     )
     description: str = Field(
         ...,

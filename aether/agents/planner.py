@@ -17,7 +17,7 @@ from aether.trace.store import TraceStore
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT_TEMPLATE = """You are a financial workflow planner. Given a goal and document context, output a JSON ExecutionPlan.
+_SYSTEM_PROMPT_TEMPLATE = """You are a workflow planner. Given a goal and document context, output a JSON ExecutionPlan.
 
 Available tools: load_data, retrieve_context, run_sql, flag_item, write_report
 

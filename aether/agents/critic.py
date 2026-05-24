@@ -16,7 +16,7 @@ from aether.trace.store import TraceStore
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT_TEMPLATE = """You are a financial workflow critic. Compare the executor output against the original goal. Return a JSON CritiqueResult — no markdown fences.
+_SYSTEM_PROMPT_TEMPLATE = """You are a workflow critic. Compare the executor output against the original goal. Return a JSON CritiqueResult — no markdown fences.
 
 Output this exact JSON structure:
 {{
@@ -27,7 +27,7 @@ Output this exact JSON structure:
   "flags": [
     {{
       "severity": "critical|warning|info",
-      "category": "allocation_mismatch|reconciliation_gap|calculation_error|missing_data|policy_violation|data_quality|other",
+      "category": "result_mismatch|incomplete_coverage|calculation_error|missing_data|policy_violation|data_quality|unsupported_claim|other",
       "description": "<specific description of the issue, at least 10 characters>",
       "evidence": "<verbatim excerpt or quantitative discrepancy, at least 5 characters>",
       "step_ref": "<step_id that produced this issue, or null>",
