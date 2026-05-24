@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="540" viewBox="0 0 680 540" role="img" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<title>Aether reason-act-observe architecture</title>
+<desc>Documents and a goal are ingested and retrieved, then a loop agent reasons one step at a time, dispatching tools through a deterministic executor, until a critic produces a verdict. Every step is written to a trace store.</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<rect x="40" y="30" width="260" height="56" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="170" y="54" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">Goal + documents</text>
+<text x="170" y="72" text-anchor="middle" font-size="12" fill="#5F5E5A">CSV / PDF / Excel / TXT</text>
+<rect x="380" y="30" width="260" height="56" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="510" y="54" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">Hybrid retrieval</text>
+<text x="510" y="72" text-anchor="middle" font-size="12" fill="#5F5E5A">BM25 + dense, RRF, rerank</text>
+<line x1="300" y1="58" x2="378" y2="58" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="380" y="130" width="260" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="510" y="154" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">Loop agent</text>
+<text x="510" y="172" text-anchor="middle" font-size="12" fill="#534AB7">Reasons one step at a time</text>
+<line x1="510" y1="86" x2="510" y2="128" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="380" y="230" width="260" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="510" y="254" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">Executor</text>
+<text x="510" y="272" text-anchor="middle" font-size="12" fill="#0F6E56">Deterministic tool dispatch</text>
+<text x="524" y="212" text-anchor="start" font-size="12" fill="#5F5E5A">picks one tool</text>
+<line x1="510" y1="186" x2="510" y2="228" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="356" y="212" text-anchor="end" font-size="12" fill="#5F5E5A">observe</text>
+<path d="M380 258 L330 258 L330 158 L378 158" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="40" y="222" width="300" height="72" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="190" y="246" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">Tools</text>
+<text x="190" y="265" text-anchor="middle" font-size="12" fill="#0F6E56">load_data · run_sql · retrieve_context</text>
+<text x="190" y="282" text-anchor="middle" font-size="12" fill="#0F6E56">flag_item · write_report · render_visual</text>
+<line x1="378" y1="258" x2="342" y2="258" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="40" y="330" width="300" height="56" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+<text x="190" y="354" text-anchor="middle" font-size="14" font-weight="500" fill="#412402">answer_from_context</text>
+<text x="190" y="372" text-anchor="middle" font-size="12" fill="#854F0B">Grounding guard — refuses to fabricate</text>
+<line x1="190" y1="294" x2="190" y2="328" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="380" y="330" width="260" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="510" y="354" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">Critic</text>
+<text x="510" y="372" text-anchor="middle" font-size="12" fill="#534AB7">Verdict: pass / partial / fail</text>
+<text x="524" y="312" text-anchor="start" font-size="12" fill="#5F5E5A">when is_final</text>
+<line x1="510" y1="286" x2="510" y2="328" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="40" y="440" width="600" height="56" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="340" y="464" text-anchor="middle" font-size="14" font-weight="500" fill="#042C53">Trace store (SQLite)</text>
+<text x="340" y="482" text-anchor="middle" font-size="12" fill="#185FA5">Every reasoning step, tool call, and observation — fully auditable</text>
+<line x1="340" y1="396" x2="340" y2="438" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+</svg>

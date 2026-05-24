@@ -110,8 +110,8 @@ reasoning over flattened table text.
 - streamlit · duckdb + pandas · sqlite3 (trace) · pytest
 
 ## Current Results (honest)
-- Retrieval (n=200 over 380 contexts / 2,476 chunks): R@1 0.68, R@3 0.81,
-  R@5 0.86, MRR@3 0.74, nDCG@5 0.78
+- Retrieval (n=200 over 380 contexts, 512/100 shipped config): R@1 0.675,
+  R@3 0.81, R@5 0.85, MRR@3 0.733, nDCG@5 0.769
 - End-to-end FinQA (n=200, gpt-5.4-mini, table-routing, Number-Match v2 scored):
   75.5% raw (151/200); 79.5% on benchmark-fair questions (10 records excluded as
   benchmark-defective, enumerated in the validation log). Single run; variance
