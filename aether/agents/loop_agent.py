@@ -47,6 +47,13 @@ retrieve_context
   {"query": "<search string>", "top_k": 5}
   Retrieves relevant document chunks from the corpus. Use if you need more context mid-task.
 
+answer_from_context
+  {"question": "<the question to answer>", "context": ["<chunk text 1>", "<chunk text 2>", ...]}
+  Synthesizes a grounded answer from retrieved text evidence. Use this for questions that require
+  reasoning over document text (not tabular computation). Pass the chunk texts from a prior
+  retrieve_context call as the context list. Returns {"answer": str, "grounded": bool,
+  "insufficient_context": bool}. If insufficient_context is true, retrieve more chunks first.
+
 JSON RULES — your output is machine-parsed; these cause hard failures:
 - No markdown fences (no ```json), no prose before or after the JSON object.
 - No trailing commas inside objects or arrays.

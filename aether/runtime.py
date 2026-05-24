@@ -16,6 +16,7 @@ from aether.models.agent_action import AgentObservation, LoopState, LoopStep
 from aether.models.plan import ExecutionPlan, PlanStep
 from aether.models.trace import TraceEvent
 from aether.rag.retriever import HybridRetriever
+from aether.tools.answer_from_context import AnswerFromContextTool
 from aether.tools.retrieve_context import RetrieveContextTool
 from aether.trace.store import TraceStore
 
@@ -40,7 +41,11 @@ class AetherRuntime:
         self.loader = DocumentLoader()
         self.retriever = HybridRetriever(ephemeral=eval_mode)
         retrieve_tool = RetrieveContextTool(self.retriever)
-        runtime_tools = {"retrieve_context": retrieve_tool}
+        answer_tool = AnswerFromContextTool(settings)
+        runtime_tools = {
+            "retrieve_context": retrieve_tool,
+            "answer_from_context": answer_tool,
+        }
         if extra_tools:
             runtime_tools.update(extra_tools)
         self.planner = PlannerAgent()

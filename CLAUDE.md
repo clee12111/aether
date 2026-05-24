@@ -27,15 +27,26 @@ User Goal + Documents
 → STREAMLIT UI (Run / Trace Explorer / Eval Dashboard)
 
 ### Key design facts (do not misdescribe)
-- The EXECUTOR makes ZERO LLM calls. Deterministic tool dispatch. This is 
-  intentional and is the system's strongest design decision. It dispatches; 
-  it does not reason. There is NO executor model slot.
+- The EXECUTOR principle (evolved): data operations are deterministic;
+  synthesis is an explicit, auditable LLM step.
+  - load_data / run_sql / flag_item / write_report: ZERO LLM calls.
+    Deterministic Python tool dispatch. The executor does not reason.
+  - answer_from_context: the deliberate, isolated exception. ONE LLM call
+    per invocation to synthesize a grounded answer from retrieved evidence.
+    Clearly separated from data tools; returns grounded/insufficient_context
+    flags so the critic can audit the synthesis. Do NOT blur this boundary
+    by adding LLM calls to the other four tools.
+  - There is NO executor model slot. answer_from_context routes via
+    planner_provider/planner_model (same frontier model, same routing).
 - CRITIC uses overall_verdict ("pass"/"partial"/"fail").
 - CritiqueFlag uses severity ("critical"/"warning"/"info").
 
-## Real Tools (four, genuine side effects)
-- load_data, run_sql, flag_item, write_report
-- retrieve_context (wired via runtime extra_tools — wraps live HybridRetriever)
+## Real Tools (five data tools + synthesis)
+- load_data, run_sql, flag_item, write_report  ← deterministic, zero LLM
+- retrieve_context  ← wired via runtime extra_tools, wraps HybridRetriever
+- answer_from_context  ← wired via runtime extra_tools, makes ONE LLM call;
+  takes question + context chunks, returns grounded synthesized answer.
+  This is what enables reasoning over text documents, not just retrieval.
 
 ## Non-Negotiable Patterns
 1. Every agent output is a Pydantic model. No freeform dicts.

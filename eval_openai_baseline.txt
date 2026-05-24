@@ -1,0 +1,139 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\ppeng\Desktop\Aether\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\ppeng\Desktop\Aether
+configfile: pyproject.toml
+plugins: anyio-4.13.0, timeout-2.4.0
+timeout: 600.0s
+timeout method: thread
+timeout func_only: False
+collecting ... collected 15 items
+
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[flag_5pct_deviation] FAILED [  6%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[flag_10pct_deviation] PASSED [ 13%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[largest_distribution] PASSED [ 20%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[ownership_over_20pct] PASSED [ 26%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[reconcile_total_distributions] PASSED [ 33%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[distribution_exceeds_opening] PASSED [ 40%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[ironwood_anomaly] PASSED [ 46%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[quarterly_cap_check] FAILED [ 53%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[small_holder_cap] PASSED [ 60%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[ownership_tolerance_check] PASSED [ 66%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[duplicate_transactions] PASSED [ 73%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[suspicious_fees] PASSED [ 80%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[allocation_mismatch] PASSED [ 86%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[compliance_threshold_flag] PASSED [ 93%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[compliance_review] PASSED [100%]
+
+================================== FAILURES ===================================
+____________________ test_e2e_agentic[flag_5pct_deviation] ____________________
+
+runtime = <aether.runtime.AetherRuntime object at 0x000001FCF606C810>
+case = {'case_id': 'flag_5pct_deviation', 'expected_flags_min': 1, 'expected_verdict': 'pass', 'file_paths': ['data/demo/fund_capital_accounts.csv'], ...}
+request = <FixtureRequest for <Function test_e2e_agentic[flag_5pct_deviation]>>
+
+    @pytest.mark.parametrize(
+        "case", _cases, ids=[c["case_id"] for c in _cases]
+    )
+    def test_e2e_agentic(runtime, case, request):
+        if request.node.get_closest_marker("quick") or "quick" in request.config.getoption("-m", default=""):
+            if case["case_id"] not in _quick_ids:
+                pytest.skip("skipped in quick mode")
+    
+        result = runtime.run_agentic(case["goal"], case["file_paths"], max_steps=10)
+        critique = result["critique"]
+    
+        # -- Verdict --
+        verdict = critique["overall_verdict"]
+        expected = case["expected_verdict"]
+        if expected == "fail":
+            assert verdict == "fail", (
+                f"[{case['case_id']}] verdict: got {verdict!r}, expected 'fail'"
+            )
+        elif expected != "any":
+>           assert verdict in ("pass", "partial"), (
+                f"[{case['case_id']}] verdict: got {verdict!r}, expected 'pass' or 'partial'"
+            )
+E           AssertionError: [flag_5pct_deviation] verdict: got 'fail', expected 'pass' or 'partial'
+E           assert 'fail' in ('pass', 'partial')
+
+evals\end_to_end\test_e2e_agentic.py:104: AssertionError
+---------------------------- Captured stderr setup ----------------------------
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n\rLoading weights:   0%|          | 0/103 [00:00<?, ?it/s]\rLoading weights: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 103/103 [00:00<00:00, 9361.27it/s]\n\x1b[1mBertModel LOAD REPORT\x1b[0m from: sentence-transformers/all-MiniLM-L6-v2\nKey                     | Status     |  | \n------------------------+------------+--+-\nembeddings.position_ids | UNEXPECTED |  | \n\nNotes:\n- UNEXPECTED:\tcan be ignored when loading from different task/architecture; not ok if you expect identical arch.
+----------------------------- Captured log setup ------------------------------
+WARNING  huggingface_hub.utils._http:_http.py:904 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+____________________ test_e2e_agentic[quarterly_cap_check] ____________________
+
+runtime = <aether.runtime.AetherRuntime object at 0x000001FCF606C810>
+case = {'case_id': 'quarterly_cap_check', 'expected_flags_min': 1, 'expected_verdict': 'pass', 'file_paths': ['data/demo/fund_capital_accounts.csv', 'data/demo/fund_agreement.txt'], ...}
+request = <FixtureRequest for <Function test_e2e_agentic[quarterly_cap_check]>>
+
+    @pytest.mark.parametrize(
+        "case", _cases, ids=[c["case_id"] for c in _cases]
+    )
+    def test_e2e_agentic(runtime, case, request):
+        if request.node.get_closest_marker("quick") or "quick" in request.config.getoption("-m", default=""):
+            if case["case_id"] not in _quick_ids:
+                pytest.skip("skipped in quick mode")
+    
+        result = runtime.run_agentic(case["goal"], case["file_paths"], max_steps=10)
+        critique = result["critique"]
+    
+        # -- Verdict --
+        verdict = critique["overall_verdict"]
+        expected = case["expected_verdict"]
+        if expected == "fail":
+            assert verdict == "fail", (
+                f"[{case['case_id']}] verdict: got {verdict!r}, expected 'fail'"
+            )
+        elif expected != "any":
+>           assert verdict in ("pass", "partial"), (
+                f"[{case['case_id']}] verdict: got {verdict!r}, expected 'pass' or 'partial'"
+            )
+E           AssertionError: [quarterly_cap_check] verdict: got 'fail', expected 'pass' or 'partial'
+E           assert 'fail' in ('pass', 'partial')
+
+evals\end_to_end\test_e2e_agentic.py:104: AssertionError
+=========================== short test summary info ===========================
+FAILED evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[flag_5pct_deviation]
+FAILED evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[quarterly_cap_check]
+================== 2 failed, 13 passed in 237.91s (0:03:57) ===================
+
+════════════════════════════════════════════════════════════════════════
+  SUITE FAILURE LANDSCAPE  (15 runs, anchor=latest)
+════════════════════════════════════════════════════════════════════════
+
+  Hit max_steps (loop stall)  3 run(s)
+    13dca6f8  Using the compliance policy and the multi-quarter transaction log…
+             ↳ verdict=partial
+    d4319754  Using the compliance policy and the multi-quarter transaction log…
+             ↳ verdict=partial
+    749e41fe  Load the multi-quarter transaction log. Identify any income alloc…
+             ↳ verdict=partial
+
+  write_report never called  3 run(s)
+    13dca6f8  Using the compliance policy and the multi-quarter transaction log…
+             ↳ write_report never dispatched
+    d4319754  Using the compliance policy and the multi-quarter transaction log…
+             ↳ write_report never dispatched
+    749e41fe  Load the multi-quarter transaction log. Identify any income alloc…
+             ↳ write_report never dispatched
+
+  Critic verdict = fail  2 run(s)
+    37b94609  Using the fund capital accounts CSV and the fund agreement, check…
+             ↳ critic=fail
+    f24104a6  Load the fund capital accounts CSV. Flag any partner whose distri…
+             ↳ critic=fail
+
+  Critic verdict = partial  4 run(s)
+    13dca6f8  Using the compliance policy and the multi-quarter transaction log…
+             ↳ critic=partial
+    d4319754  Using the compliance policy and the multi-quarter transaction log…
+             ↳ critic=partial
+    749e41fe  Load the multi-quarter transaction log. Identify any income alloc…
+             ↳ critic=partial
+    a6f7e217  Load the fund capital accounts CSV. Analyze Ironwood Ventures LLC…
+             ↳ critic=partial
+
+  pass rate: 9/15 (60%)  6 with issues
+

@@ -1,0 +1,28 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\ppeng\Desktop\Aether\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\ppeng\Desktop\Aether
+configfile: pyproject.toml
+plugins: anyio-4.13.0, timeout-2.4.0
+timeout: 600.0s
+timeout method: thread
+timeout func_only: False
+collecting ... collected 15 items
+
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[flag_5pct_deviation] PASSED [  6%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[flag_10pct_deviation] PASSED [ 13%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[largest_distribution] PASSED [ 20%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[ownership_over_20pct] PASSED [ 26%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[reconcile_total_distributions] PASSED [ 33%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[distribution_exceeds_opening] PASSED [ 40%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[ironwood_anomaly] PASSED [ 46%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[quarterly_cap_check] PASSED [ 53%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[small_holder_cap] PASSED [ 60%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[ownership_tolerance_check] PASSED [ 66%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[duplicate_transactions] PASSED [ 73%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[suspicious_fees] PASSED [ 80%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[allocation_mismatch] PASSED [ 86%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[compliance_threshold_flag] PASSED [ 93%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[compliance_review] PASSED [100%]
+
+======================= 15 passed in 194.30s (0:03:14) ========================

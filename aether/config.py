@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     chat_model: str = Field(default="claude-sonnet-4-6", description="Model for Chat interface")
 
     # ── Provider routing ──────────────────────────────────────────────────────
-    planner_provider: str = Field(default="ollama", description="planner: 'ollama' or 'anthropic'")
-    critic_provider: str = Field(default="ollama", description="critic: 'ollama' or 'anthropic'")
+    planner_provider: str = Field(default="openai", description="planner: 'openai', 'ollama', or 'anthropic'")
+    critic_provider: str = Field(default="openai", description="critic: 'openai', 'ollama', or 'anthropic'")
     ollama_base_url: str = Field(default="http://localhost:11434/v1", description="Ollama OpenAI-compatible endpoint")
 
     # local model names (used when provider == 'ollama')
