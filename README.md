@@ -16,20 +16,17 @@ Give Aether a financial document and a plain-language goal. It reasons one step 
 
 ---
 
-## The headline
+## What it does
 
-```
-Document in, grounded visual out — every value traceable to a source cell.
-75.5% end-to-end on FinQA (n=200), measured honestly and corrected downward
-  from an early, wrong 87%.
-700-row financial dataset aggregated to per-segment totals that matched an
-  independent computation exactly.
-Stress-tested with two adversarial prompts — it refused to fabricate both times.
-```
+Financial questions over documents are messy: the data is in a PDF table or a 700-row CSV with dollar signs and parenthesized negatives, and the steps to answer vary with the question. Aether takes the document and the goal, figures out the steps, runs them, and returns a chart or a number with the full reasoning recorded.
 
-The most important property is not the accuracy number — it's what the engine does when it *can't* answer. Asked to chart five years of data from a two-year document, it searched the available tables, found only two years, and returned a PARTIAL verdict with the evidence for why — rather than inventing three years to fill the chart. For a tool meant for financial work, refusing to fabricate is the feature that matters.
+Three things distinguish it:
 
-And the accuracy number itself is a measurement story. An early run reported 87%. Inspecting the scorer revealed it was crediting wrong answers — the instrument was lying, not the engine. Corrected, the number fell to 68.5%, then settled at a defensible 75.5% after real fixes. The honest 75.5% is worth more than the inflated 87%, and learning to distrust the measurement before trusting the result is the core skill this project demonstrates.
+- **Grounded output.** Charts and figures are built from computed tool results, copied verbatim. The engine does not generate numbers — it reads them from a SQL query, and every value traces back to a source cell.
+- **Observable reasoning.** Every step, tool call, and observation is written to a trace store and shown in the UI as a readable sequence. You can see exactly how an answer was reached, or why one wasn't.
+- **Refuses rather than fabricates.** When the document can't support the question — asked for five years of data that only has two — it returns a partial result with the evidence for why, instead of inventing the missing data to fill the chart.
+
+Numbers: 75.5% end-to-end on FinQA (n=200); a 700-row dataset aggregated to per-segment totals matching an independent computation exactly; two adversarial stress tests, no fabrication in either. The accuracy figure was corrected downward from an early 87% after the scorer was found crediting wrong answers — the numbers here are measured at the floor, not the peak.
 
 ---
 
