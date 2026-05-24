@@ -54,6 +54,14 @@ answer_from_context  [OPTIONAL]
   retrieve_context call. Returns {"answer": str, "grounded": bool, "insufficient_context": bool}.
   If insufficient_context is true, retrieve more chunks first, then retry.
 
+render_visual  [ONLY when the goal requests a chart/graph/visualization]
+  {"title": "<chart title>", "x_field": "<category field name>", "y_field": "<numeric field name>", "data": [{"<x_field>": "...", "<y_field>": 123}, ...], "color_field": "<optional grouping field>", "source_step": "<step index that produced the data>"}
+  Builds a grouped bar chart from ALREADY-COMPUTED data. CRITICAL: the data values MUST be
+  copied from a prior tool observation (run_sql rows, flag_item results, etc.) — do NOT
+  invent or estimate numeric values. If you lack sufficient computed data for the requested
+  chart, do NOT call this tool — write_report the text findings instead.
+  Call AFTER your analysis is complete, BEFORE write_report.
+
 JSON RULES — your output is machine-parsed; these cause hard failures:
 - No markdown fences (no ```json), no prose before or after the JSON object.
 - No trailing commas inside objects or arrays.
@@ -114,7 +122,7 @@ def _summarise_observation(output: dict, error: str | None) -> str:
     return s[:_OBS_MAX_CHARS] + ("..." if len(s) > _OBS_MAX_CHARS else "")
 
 
-def _build_prompt(state: LoopState, file_paths: list[str] | None = None) -> str:
+def _build_prompt(state: LoopState, file_paths: list[str] | None = None, forced_feedback: str | None = None) -> str:
     # Schema block — exact file paths + column headers so the model can call
     # load_data correctly. Sourced from planner._build_schema_block (same logic).
     if file_paths:
@@ -152,11 +160,16 @@ def _build_prompt(state: LoopState, file_paths: list[str] | None = None) -> str:
     else:
         history_block = "PRIOR STEPS: (none — this is your first action)\n"
 
+    feedback_block = (
+        f"FORCED FEEDBACK: {forced_feedback}\n\n"
+        if forced_feedback else ""
+    )
     return (
         f"GOAL: {state.goal}\n\n"
         f"{schema_block}\n"
         f"{ctx_block}\n"
         f"{history_block}\n"
+        f"{feedback_block}"
         f"What is the SINGLE next action? Output AgentAction JSON only."
     )
 
@@ -274,6 +287,7 @@ class LoopAgent:
         self,
         state: LoopState,
         file_paths: list[str] | None = None,
+        forced_feedback: str | None = None,
     ) -> tuple[AgentAction, int, int]:
         """Ask the model for the next single AgentAction.
 
@@ -284,7 +298,7 @@ class LoopAgent:
         """
         step_index = len(state.steps)
         step_id = f"rao_step_{step_index}"
-        user_prompt = _build_prompt(state, file_paths=file_paths)
+        user_prompt = _build_prompt(state, file_paths=file_paths, forced_feedback=forced_feedback)
         last_error: str | None = None
         last_bad_action: AgentAction | None = None
         last_in_tok, last_out_tok = 0, 0

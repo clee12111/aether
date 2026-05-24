@@ -10,6 +10,7 @@ from aether.tools.base import BaseTool
 from aether.tools.flag_item import FlagItemTool
 from aether.tools.load_data import LoadDataTool
 from aether.tools.run_sql import RunSQLTool
+from aether.tools.render_visual import RenderVisualTool
 from aether.tools.write_report import WriteReportTool
 from aether.trace.store import TraceStore
 
@@ -23,6 +24,7 @@ class ExecutorAgent:
             "run_sql": RunSQLTool(),
             "flag_item": FlagItemTool(),
             "write_report": WriteReportTool(),
+            "render_visual": RenderVisualTool(),
         }
         if extra_tools:
             self._tools.update(extra_tools)

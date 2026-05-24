@@ -198,6 +198,6 @@ for r in [1, 2, 3, 4, 5, "miss"]:
 
 # Save full detail
 import json
-out = Path("eval_retrieval_200.json")
+out = Path(__file__).parent / "results" / "eval_retrieval_200.json"
 out.write_text(json.dumps(details, indent=2, ensure_ascii=False), encoding="utf-8")
 print(f"\n  Full detail → {out}")

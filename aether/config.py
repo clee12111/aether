@@ -88,7 +88,7 @@ class Settings(BaseSettings):
 
     # ── Ingestion ─────────────────────────────────────────────────────────────
     chunk_size: int = Field(
-        default=800,
+        default=512,
         ge=100,
         le=8000,
         description="Max characters per text chunk (PDF / text splitting)",

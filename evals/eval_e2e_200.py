@@ -36,9 +36,10 @@ for lib in ("chromadb", "sentence_transformers", "httpx", "httpcore",
             "aether", "datasets", "filelock", "fsspec"):
     logging.getLogger(lib).setLevel(logging.ERROR)
 
-DEMO_DIR     = Path("data/demo_200")
-OUT_JSONL    = Path("eval_e2e_200.jsonl")
-SUMMARY_JSON = Path("eval_e2e_200_summary.json")
+_EVALS_DIR   = Path(__file__).parent
+DEMO_DIR     = _EVALS_DIR.parent / "data" / "demo_200"
+OUT_JSONL    = _EVALS_DIR / "results" / "eval_e2e_200.jsonl"
+SUMMARY_JSON = _EVALS_DIR / "results" / "eval_e2e_200_summary.json"
 N_RECORDS    = 200
 
 # ── Number-Match scorer ────────────────────────────────────────────────────────

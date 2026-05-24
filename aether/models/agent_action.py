@@ -33,4 +33,7 @@ class LoopState(BaseModel):
     initial_context: list[str] = Field(default_factory=list)
     steps: list[LoopStep] = Field(default_factory=list)
     is_complete: bool = False
-    stop_reason: str | None = None  # "is_final" | "max_steps" | "error"
+    stop_reason: str | None = None  # "is_final" | "max_steps" | "forced_stop_no_write_report" | "error"
+    # write_report guard tracking (set by runtime, not persisted to trace)
+    write_report_called: bool = False
+    forced_continuations: int = 0

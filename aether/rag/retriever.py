@@ -465,5 +465,5 @@ def _reciprocal_rank_fusion(
             rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (k + rank + 1)
             index[cid] = chunk
 
-    ordered = sorted(rrf, key=lambda cid: rrf[cid], reverse=True)
+    ordered = sorted(rrf, key=lambda cid: (-rrf[cid], cid))
     return [index[cid] for cid in ordered[:top_k]]

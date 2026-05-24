@@ -91,21 +91,47 @@ class AetherRuntime:
         # ── 2. Initial retrieval ───────────────────────────────────────────────
         context_chunks = self.retriever.retrieve(goal)
 
+        # ── 2b. Visual intent detection ───────────────────────────────────
+        _VISUAL_TERMS = {"chart", "bar chart", "graph", "plot", "visualize", "visualization", "show me a chart"}
+        goal_lower = goal.lower()
+        visual_requested = any(term in goal_lower for term in _VISUAL_TERMS)
+
+        effective_goal = goal
+        if visual_requested:
+            effective_goal = (
+                goal + "\n\nNOTE: The user has requested a visual output. After completing "
+                "your analysis, call render_visual with the computed data to produce a chart. "
+                "Only use data values from prior tool observations — do not invent numbers."
+            )
+
         # ── 3. Build initial LoopState ────────────────────────────────────────
         loop_agent = LoopAgent()
         state = LoopState(
             run_id=run_id,
-            goal=goal,
+            goal=effective_goal,
             initial_context=[c.content for c in context_chunks],
         )
 
         # ── 4. RAO loop ───────────────────────────────────────────────────────
+        _MAX_FORCED_CONTINUATIONS = 2
+        _FORCED_FEEDBACK_MSG = (
+            "You set is_final=true but have not called write_report. "
+            "You MUST call write_report to persist findings before finishing. "
+            "Call it now."
+        )
+        pending_forced_feedback: str | None = None
+
         while len(state.steps) < max_steps and not state.is_complete:
             step_index = len(state.steps)
             step_id = f"rao_step_{step_index}"
 
-            # 4a. Decide
-            action, in_tok, out_tok = loop_agent.decide(state, file_paths=file_paths)
+            # 4a. Decide (passes any pending forced-continuation feedback)
+            action, in_tok, out_tok = loop_agent.decide(
+                state,
+                file_paths=file_paths,
+                forced_feedback=pending_forced_feedback,
+            )
+            pending_forced_feedback = None  # consumed regardless of outcome
             logger.info(
                 "Step %d: tool=%r is_final=%s in_tok=%d out_tok=%d",
                 step_index, action.tool, action.is_final, in_tok, out_tok,
@@ -120,12 +146,31 @@ class AetherRuntime:
             # driven by the model's is_final — not by which tool was called.
             #
             # Two cases:
-            #   is_final=true, tool=""  → terminate immediately (no dispatch)
-            #   is_final=true, tool=X   → dispatch X, record observation, then terminate
+            #   is_final=true, tool=""  → write_report guard check, then terminate
+            #   is_final=true, tool=X   → dispatch X, update write_report flag,
+            #                             write_report guard check, then terminate
             if action.is_final and not action.tool.strip():
-                logger.info("Step %d: is_final=true, no tool — terminating", step_index)
+                # write_report guard — no tool was named, so nothing was dispatched.
+                # If write_report was never called and we have budget, force one more step.
+                if not state.write_report_called and state.forced_continuations < _MAX_FORCED_CONTINUATIONS:
+                    state.forced_continuations += 1
+                    pending_forced_feedback = _FORCED_FEEDBACK_MSG
+                    logger.warning(
+                        "Step %d: is_final=true (no tool) but write_report never called "
+                        "— forcing continuation %d/%d",
+                        step_index, state.forced_continuations, _MAX_FORCED_CONTINUATIONS,
+                    )
+                    continue  # restart loop; no LoopStep added for this attempt
+                if not state.write_report_called:
+                    logger.warning(
+                        "Step %d: forced-stop after %d forced continuations, "
+                        "write_report never called",
+                        step_index, state.forced_continuations,
+                    )
+                    state.stop_reason = "forced_stop_no_write_report"
+                else:
+                    state.stop_reason = "is_final"
                 state.is_complete = True
-                state.stop_reason = "is_final"
                 break
 
             # 4d. Dispatch one tool through the existing executor
@@ -136,14 +181,18 @@ class AetherRuntime:
                 step_id=step_id,
             )
 
-            # 4e. Wrap into AgentObservation
+            # 4e. Track write_report usage
+            if action.tool == "write_report":
+                state.write_report_called = True
+
+            # 4f. Wrap into AgentObservation
             observation = AgentObservation(
                 success=error_msg is None,
                 output=result_dict,
                 error=error_msg,
             )
 
-            # 4f. Append to loop state
+            # 4g. Append to loop state
             state.steps.append(LoopStep(
                 step_index=step_index,
                 action=action,
@@ -154,16 +203,35 @@ class AetherRuntime:
                 step_index, observation.success, list(result_dict.keys()),
             )
 
-            # 4g. If this step carried is_final=true, terminate now that the
-            #     tool has been dispatched and recorded.
+            # 4h. If this step carried is_final=true, apply write_report guard
+            #     then terminate (tool has already been dispatched and recorded).
             if action.is_final:
-                logger.info(
-                    "Step %d: is_final=true with tool=%r — dispatched, now terminating",
-                    step_index, action.tool,
-                )
-                state.is_complete = True
-                state.stop_reason = "is_final"
-                break
+                if not state.write_report_called and state.forced_continuations < _MAX_FORCED_CONTINUATIONS:
+                    state.forced_continuations += 1
+                    pending_forced_feedback = _FORCED_FEEDBACK_MSG
+                    logger.warning(
+                        "Step %d: is_final=true with tool=%r but write_report never called "
+                        "— forcing continuation %d/%d",
+                        step_index, action.tool,
+                        state.forced_continuations, _MAX_FORCED_CONTINUATIONS,
+                    )
+                    # Do not break — continue the loop with feedback injected
+                else:
+                    if not state.write_report_called:
+                        logger.warning(
+                            "Step %d: forced-stop after %d forced continuations, "
+                            "write_report never called",
+                            step_index, state.forced_continuations,
+                        )
+                        state.stop_reason = "forced_stop_no_write_report"
+                    else:
+                        logger.info(
+                            "Step %d: is_final=true with tool=%r — dispatched, now terminating",
+                            step_index, action.tool,
+                        )
+                        state.stop_reason = "is_final"
+                    state.is_complete = True
+                    break
 
         # ── 5. Max-steps guard ────────────────────────────────────────────────
         if not state.is_complete:
