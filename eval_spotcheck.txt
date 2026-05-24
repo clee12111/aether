@@ -1,0 +1,21 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\ppeng\Desktop\Aether\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\ppeng\Desktop\Aether
+configfile: pyproject.toml
+plugins: anyio-4.13.0
+collecting ... collected 15 items / 12 deselected / 3 selected
+
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[largest_distribution] PASSED [ 33%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[ownership_over_20pct] FAILED [ 66%]
+evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[suspicious_fees] PASSED [100%]
+
+================================== FAILURES ===================================
+___________________ test_e2e_agentic[ownership_over_20pct] ____________________
+evals\end_to_end\test_e2e_agentic.py:104: in test_e2e_agentic
+    assert verdict in ("pass", "partial"), (
+E   AssertionError: [ownership_over_20pct] verdict: got 'fail', expected 'pass' or 'partial'
+E   assert 'fail' in ('pass', 'partial')
+=========================== short test summary info ===========================
+FAILED evals/end_to_end/test_e2e_agentic.py::test_e2e_agentic[ownership_over_20pct]
+=========== 1 failed, 2 passed, 12 deselected in 722.42s (0:12:02) ============

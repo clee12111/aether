@@ -20,6 +20,7 @@ dependencies = [
     "rich",
     "pytest",
     "python-dotenv",
+    "pytest-timeout>=2.4.0",
 ]
 
 [build-system]

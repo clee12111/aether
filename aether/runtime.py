@@ -106,8 +106,19 @@ class AetherRuntime:
                 step_index, action.tool, action.is_final, in_tok, out_tok,
             )
 
-            # 4c. Check for completion
-            if action.is_final:
+            # 4c. Check for completion.
+            #
+            # The model may legitimately combine its final action with the
+            # completion signal (e.g. write_report + is_final=true in one
+            # response). The loop honours the named tool before terminating
+            # so the action is never silently dropped. Termination is always
+            # driven by the model's is_final — not by which tool was called.
+            #
+            # Two cases:
+            #   is_final=true, tool=""  → terminate immediately (no dispatch)
+            #   is_final=true, tool=X   → dispatch X, record observation, then terminate
+            if action.is_final and not action.tool.strip():
+                logger.info("Step %d: is_final=true, no tool — terminating", step_index)
                 state.is_complete = True
                 state.stop_reason = "is_final"
                 break
@@ -137,6 +148,17 @@ class AetherRuntime:
                 "Step %d observation: success=%s output_keys=%s",
                 step_index, observation.success, list(result_dict.keys()),
             )
+
+            # 4g. If this step carried is_final=true, terminate now that the
+            #     tool has been dispatched and recorded.
+            if action.is_final:
+                logger.info(
+                    "Step %d: is_final=true with tool=%r — dispatched, now terminating",
+                    step_index, action.tool,
+                )
+                state.is_complete = True
+                state.stop_reason = "is_final"
+                break
 
         # ── 5. Max-steps guard ────────────────────────────────────────────────
         if not state.is_complete:
