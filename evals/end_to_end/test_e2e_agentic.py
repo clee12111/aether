@@ -70,9 +70,13 @@ def runtime():
 
 @pytest.fixture(autouse=True)
 def reset_retriever(runtime):
-    # Per-case isolation: clear index state before each test so no documents
-    # from the previous case bleed into this one's retrieval or BM25 search.
+    # Per-case isolation: reset all stateful objects held by the module-scoped
+    # runtime before each test.
+    #   - retriever: clears Chroma index + BM25 state
+    #   - tool state: clears FlagItemTool._flags and LoadDataTool._registry so
+    #     flags and loaded tables from case N don't bleed into case N+1.
     runtime.retriever.reset_index()
+    runtime.reset_tool_state()
     yield
 
 

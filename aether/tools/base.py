@@ -10,3 +10,6 @@ class BaseTool(ABC):
 
     @abstractmethod
     def run(self, args: dict) -> dict: ...
+
+    def reset(self) -> None:
+        """Reset any per-run accumulated state. No-op by default."""

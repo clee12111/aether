@@ -52,6 +52,10 @@ class AetherRuntime:
         with sqlite3.connect(str(settings.db_path)) as conn:
             conn.execute(_CREATE_REVIEW_QUEUE)
 
+    def reset_tool_state(self) -> None:
+        """Reset all per-run accumulated state in executor tools (flags, loaded tables, etc.)."""
+        self.executor.reset_tool_state()
+
     def run_agentic(self, goal: str, file_paths: list[str], max_steps: int = 10) -> dict:
         """Hand-rolled REASON-ACT-OBSERVE loop.
 

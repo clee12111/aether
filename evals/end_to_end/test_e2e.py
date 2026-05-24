@@ -39,11 +39,13 @@ def runtime():
 
 @pytest.fixture(autouse=True)
 def reset_retriever(runtime):
-    # Per-case isolation: wipe index state before each test so no documents
-    # leak from the previous case's corpus into this one's retrieval.
-    # NOTE: prior runs of this suite without this fixture had 448 orphan chunks
-    # polluting Chroma — those numbers are suspect and should be re-run.
+    # Per-case isolation: reset all stateful objects held by the module-scoped
+    # runtime before each test.
+    #   - retriever: clears Chroma index + BM25 state (448-chunk leak without this)
+    #   - tool state: clears FlagItemTool._flags and LoadDataTool._registry so
+    #     flags and loaded tables from case N don't bleed into case N+1.
     runtime.retriever.reset_index()
+    runtime.reset_tool_state()
     yield
 
 

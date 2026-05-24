@@ -43,6 +43,11 @@ class ExecutorAgent:
 
         return state
 
+    def reset_tool_state(self) -> None:
+        """Reset all per-run accumulated state in every registered tool."""
+        for tool in self._tools.values():
+            tool.reset()
+
     def dispatch_one(self, tool_name: str, args: dict, run_id: str, step_id: str) -> tuple[dict, str | None]:
         """Dispatch a single tool by name without building a full plan.
 

@@ -72,6 +72,9 @@ class FlagItemTool(BaseTool):
         self._flags.append({"item_id": "unknown", "reason": reason, "severity": severity})
         return {"flagged": True, "item_id": "unknown", "total_flagged": 1}
 
+    def reset(self) -> None:
+        self._flags = []
+
     @property
     def flags(self) -> list[dict]:
         return list(self._flags)

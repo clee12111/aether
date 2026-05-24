@@ -14,6 +14,9 @@ class LoadDataTool(BaseTool):
     # Shared registry so RunSQLTool can access loaded frames
     _registry: dict[str, pd.DataFrame] = {}
 
+    def reset(self) -> None:
+        LoadDataTool._registry.clear()
+
     def run(self, args: dict) -> dict:
         file_path = _resolve_path(args["file_path"])
         table_name = args["table_name"]
