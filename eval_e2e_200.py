@@ -77,6 +77,13 @@ def _check_boolean(text: str, gold: float) -> bool | None:
         return _rel_close(1.0, gold)
     if has_no and not has_yes:
         return _rel_close(0.0, gold)
+    # Python literal booleans (case-sensitive)
+    has_True  = bool(_re.search(r"\bTrue\b",  text))
+    has_False = bool(_re.search(r"\bFalse\b", text))
+    if has_True and not has_False:
+        return _rel_close(1.0, gold)
+    if has_False and not has_True:
+        return _rel_close(0.0, gold)
     return None
 
 def number_match(model_answer: str, gold_str: str) -> bool:
@@ -92,9 +99,22 @@ def number_match(model_answer: str, gold_str: str) -> bool:
     for c in candidates:
         if _rel_close(c, gold):
             return True
-        if abs(gold) <= 1.0 and abs(c) > 1.5:
+        # /100 extended: covers gold>1.0 and small-candidate cases
+        if gold != 0 and abs(c) > abs(gold) * 50:
             if _rel_close(c / 100.0, gold):
                 return True
+        # ÷1,000 (abs(c)≥100 guard blocks e.g. low_price≈93 matching ratio≈0.093)
+        if abs(c) >= 100 and _rel_close(c / 1_000, gold):
+            return True
+        # ×1,000
+        if _rel_close(c * 1_000, gold):
+            return True
+        # ÷1,000,000 (abs(c)>1000 guard blocks share-price c=7.47 matching 7.47e-6)
+        if abs(c) > 1_000 and _rel_close(c / 1_000_000, gold):
+            return True
+        # ×1,000,000
+        if _rel_close(c * 1_000_000, gold):
+            return True
     return False
 
 # ── Load already-completed records (resume support) ───────────────────────────
