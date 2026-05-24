@@ -370,6 +370,7 @@ class LoopAgent:
                     model=model,
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
+                    cached_tokens=result.cached_tokens,
                     duration_ms=duration_ms,
                     payload={
                         "raw_text": raw[:8000],

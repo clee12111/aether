@@ -8,6 +8,7 @@ class ChatResult:
     text: str
     input_tokens: int
     output_tokens: int
+    cached_tokens: int = 0  # OpenAI prompt-cache hits; 0 for Anthropic/Ollama
 
 
 def chat(
@@ -71,10 +72,12 @@ def chat(
             temperature=0,
         )
         usage = resp.usage
+        cached = getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
         return ChatResult(
             text=resp.choices[0].message.content or "",
             input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
             output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+            cached_tokens=cached,
         )
 
     else:

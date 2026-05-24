@@ -103,6 +103,11 @@ class TraceEvent(BaseModel):
         ge=0,
         description="Completion token count (LLM events only)",
     )
+    cached_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description="Prompt-cache hit tokens (OpenAI only; 0 for Anthropic/Ollama; LLM events only)",
+    )
     prompt_hash: str | None = Field(
         default=None,
         description="First 16 hex chars of SHA-256(prompt) for dedup analysis",
@@ -134,10 +139,11 @@ class TraceEvent(BaseModel):
         """Token counts should only be set on LLM events."""
         llm_event_types = {"llm_call", "llm_response"}
         if self.event_type not in llm_event_types:
-            if self.input_tokens is not None or self.output_tokens is not None:
+            if (self.input_tokens is not None or self.output_tokens is not None
+                    or self.cached_tokens is not None):
                 raise ValueError(
-                    f"input_tokens / output_tokens are only valid on llm_call / llm_response events, "
-                    f"not {self.event_type!r}"
+                    f"input_tokens / output_tokens / cached_tokens are only valid on "
+                    f"llm_call / llm_response events, not {self.event_type!r}"
                 )
         return self
 

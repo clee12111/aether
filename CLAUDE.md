@@ -150,6 +150,10 @@ aether/
 - Table-parser handles the benchmark's uniform tables cleanly; real-world irregular
   tables (merged cells, multi-row headers) would exercise the fallback more.
 - No conversation state (ConvFinQA multi-turn out of scope).
+- No OCR: ingestion uses pdfplumber text extraction (requires a PDF text layer).
+  Born-digital PDFs/CSVs/TXT work. Scanned/image-only PDFs raise an ingestion error.
+  OCR preprocessing is a next step, not built. The error message in loader.py already
+  says so explicitly.
 
 ## What's Next (not yet done)
 - Variance re-run to finalize the headline FinQA number (~180 records fits the

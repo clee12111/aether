@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS trace_events (
     model           TEXT,
     input_tokens    INTEGER,
     output_tokens   INTEGER,
+    cached_tokens   INTEGER,
     prompt_hash     TEXT,
     payload         TEXT    NOT NULL,
     error           TEXT,
@@ -67,6 +68,10 @@ CREATE TABLE IF NOT EXISTS trace_events (
 );
 """
 
+_MIGRATE_ADD_CACHED_TOKENS = (
+    "ALTER TABLE trace_events ADD COLUMN cached_tokens INTEGER;"
+)
+
 _CREATE_IDX_RUN_ID = "CREATE INDEX IF NOT EXISTS idx_run_id ON trace_events(run_id);"
 _CREATE_IDX_EVENT_TYPE = "CREATE INDEX IF NOT EXISTS idx_event_type ON trace_events(event_type);"
 _CREATE_IDX_CREATED_AT = "CREATE INDEX IF NOT EXISTS idx_created_at ON trace_events(created_at);"
@@ -74,9 +79,9 @@ _CREATE_IDX_CREATED_AT = "CREATE INDEX IF NOT EXISTS idx_created_at ON trace_eve
 _INSERT_EVENT = """
 INSERT INTO trace_events (
     event_id, run_id, step_id, event_type, agent, model,
-    input_tokens, output_tokens, prompt_hash, payload,
+    input_tokens, output_tokens, cached_tokens, prompt_hash, payload,
     error, duration_ms, attempt, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
 
 _SELECT_RUN_EVENTS = """
@@ -93,6 +98,7 @@ SELECT
     COUNT(*)         AS event_count,
     SUM(CASE WHEN input_tokens  IS NOT NULL THEN input_tokens  ELSE 0 END) AS total_input_tokens,
     SUM(CASE WHEN output_tokens IS NOT NULL THEN output_tokens ELSE 0 END) AS total_output_tokens,
+    SUM(CASE WHEN cached_tokens IS NOT NULL THEN cached_tokens ELSE 0 END) AS total_cached_tokens,
     SUM(CASE WHEN duration_ms   IS NOT NULL THEN duration_ms   ELSE 0 END) AS total_duration_ms,
     SUM(CASE WHEN event_type = 'validation_error' THEN 1 ELSE 0 END)       AS validation_errors,
     MAX(CASE WHEN event_type = 'run_end'
@@ -150,6 +156,10 @@ class TraceStore:
             conn.execute(_CREATE_IDX_RUN_ID)
             conn.execute(_CREATE_IDX_EVENT_TYPE)
             conn.execute(_CREATE_IDX_CREATED_AT)
+            # Idempotent migration: add cached_tokens column to existing DBs.
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(trace_events)").fetchall()}
+            if "cached_tokens" not in existing:
+                conn.execute(_MIGRATE_ADD_CACHED_TOKENS)
 
     @staticmethod
     def _event_to_row(event: TraceEvent) -> tuple[Any, ...]:
@@ -163,6 +173,7 @@ class TraceStore:
             event.model,
             event.input_tokens,
             event.output_tokens,
+            event.cached_tokens,
             event.prompt_hash,
             json.dumps(event.payload, default=str),
             event.error,
@@ -282,7 +293,8 @@ class TraceStore:
         sql = """
             SELECT
                 COALESCE(SUM(input_tokens),  0) AS input_tokens,
-                COALESCE(SUM(output_tokens), 0) AS output_tokens
+                COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(cached_tokens), 0) AS cached_tokens
             FROM trace_events
             WHERE run_id = ? AND event_type IN ('llm_call', 'llm_response');
         """

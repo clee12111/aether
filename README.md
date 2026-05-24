@@ -118,6 +118,7 @@ docs/              Eval gap analysis, journal, and project documentation
 - Not a general-purpose AI assistant.
 - Not trying to solve every domain. Finance is the demo; the engine is domain-agnostic.
 - Not building a complex frontend. Streamlit is the MVP surface.
+- **No OCR.** Ingestion uses pdfplumber text extraction, which requires a PDF text layer. Born-digital PDFs, CSVs, and TXT files work. Screenshots, photos, and scanned (image-only) PDFs are not supported — they raise an ingestion error. OCR preprocessing is a documented next step, not built.
 
 ## Status
 
