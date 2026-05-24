@@ -1,3 +1,10 @@
+> ⚠️ SUPERSEDED — This documents the early 15-case eval suite (small internal benchmark).
+> Current authoritative numbers: README and `docs/aether-validation-log.md`
+> (n=200 FinQA benchmark: **75.5% e2e**, **R@5 = 86.0%**).
+> Retained for the failure-mode analysis only.
+
+---
+
 # Aether Evaluation Analysis
 
 ## Summary

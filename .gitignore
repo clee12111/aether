@@ -31,6 +31,8 @@ Thumbs.db
 # Local data stores
 data/uploads/*
 !data/uploads/.gitkeep
+data/demo_200/
+data/finqa_contexts/
 chroma_db/
 *.db
 *.sqlite
@@ -38,6 +40,7 @@ chroma_db/
 
 # Runtime artifacts
 run*.txt
+eval_*.txt
 *.log
 traces/
 
@@ -45,6 +48,7 @@ traces/
 memory/
 progress.md
 Aether-backup/
+scratch/
 
 # stray install artifacts
 $dest/

@@ -1,7 +1,0 @@
-notes to consolidated financial statements the components of accumulated other comprehensive loss , net of related tax , are as follows: ._|    | ( millions ) as of december 31       | 2007           | 2006             | 2005             |
-|---:|:-------------------------------------|:---------------|:-----------------|:-----------------|
-|  0 | net derivative gains ( losses )      | $ 24           | $ 15             | $ -11 ( 11 )     |
-|  1 | net unrealized investment gains      | 76             | 73               | 52               |
-|  2 | net foreign exchange translation     | 284            | 118              | -119 ( 119 )     |
-|  3 | postretirement plans                 | -1110 ( 1110 ) | -1216 ( 1216 )   | -1077 ( 1077 )   |
-|  4 | accumulated other comprehensive loss | $ -726 ( 726 ) | $ -1010 ( 1010 ) | $ -1155 ( 1155 ) |_aon corporation .
