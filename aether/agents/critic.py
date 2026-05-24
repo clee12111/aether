@@ -131,7 +131,7 @@ class CriticAgent:
                     input_tokens=llm_result.input_tokens,
                     output_tokens=llm_result.output_tokens,
                     duration_ms=duration_ms,
-                    payload={"raw_text": raw[:1000]},
+                    payload={"raw_text": raw[:8000]},
                     attempt=attempt,
                 ))
                 return result
@@ -143,7 +143,7 @@ class CriticAgent:
                     agent="critic",
                     attempt=attempt,
                     error=last_error,
-                    raw_response=raw[:1000],
+                    raw_response=raw[:8000],
                 ))
 
         raise ValueError(f"Critic failed after {settings.max_retries} attempts. Last error: {last_error}")

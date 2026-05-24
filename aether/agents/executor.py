@@ -80,7 +80,7 @@ class ExecutorAgent:
                 agent="executor",
                 event_type="tool_response",
                 duration_ms=duration_ms,
-                payload={"tool": tool_name, "result": str(result)[:1000]},
+                payload={"tool": tool_name, "result": str(result)[:4000]},
             ))
             return result, None
         except Exception as exc:
@@ -123,7 +123,7 @@ class ExecutorAgent:
                     agent="executor",
                     event_type="tool_response",
                     duration_ms=duration_ms,
-                    payload={"tool": step.tool, "result": str(result)[:1000]},
+                    payload={"tool": step.tool, "result": str(result)[:4000]},
                     attempt=attempt,
                 ))
                 return result, ""

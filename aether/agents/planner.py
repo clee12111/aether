@@ -123,7 +123,7 @@ class PlannerAgent:
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
                     duration_ms=duration_ms,
-                    payload={"raw_text": raw[:1000]},
+                    payload={"raw_text": raw[:8000]},
                     attempt=attempt,
                 ))
                 return plan
@@ -135,7 +135,7 @@ class PlannerAgent:
                     agent="planner",
                     attempt=attempt,
                     error=last_error,
-                    raw_response=raw[:1000],
+                    raw_response=raw[:8000],
                 ))
 
         raise ValueError(f"Planner failed after {settings.max_retries} attempts. Last error: {last_error}")

@@ -47,6 +47,15 @@ retrieve_context
   {"query": "<search string>", "top_k": 5}
   Retrieves relevant document chunks from the corpus. Use if you need more context mid-task.
 
+JSON RULES — your output is machine-parsed; these cause hard failures:
+- No markdown fences (no ```json), no prose before or after the JSON object.
+- No trailing commas inside objects or arrays.
+- Never abbreviate arrays with "..." or ellipsis. If a list has 10 items, write all 10.
+  WRONG: {"ids": ["TXN-001", "TXN-002", ...]}
+  RIGHT: {"ids": ["TXN-001", "TXN-002", "TXN-003"]}
+- All string values must use double quotes, not single quotes.
+- Boolean values are lowercase: true / false (not True / False).
+
 OUTPUT FORMAT — strict JSON, no markdown fences, no extra text:
 {
   "reasoning": "<why this action now, given what you have observed>",
@@ -127,18 +136,90 @@ def _extract_json_object(text: str) -> str:
     return text[start:]
 
 
+def _repair_json(text: str) -> str:
+    """Best-effort repair of common local-model JSON defects before parsing.
+
+    Repairs applied (in order):
+    1. Ellipsis abbreviation: ["a", "b", ...] — strip bare ... tokens so
+       the array parses. Mistral emits this instead of enumerating all items.
+    2. Trailing commas before ] or } — invalid in JSON, valid in JS/Python.
+    3. Truncated boolean/null literals at end of string — model cut off
+       mid-token (e.g. "tru" → "true", "fals" → "false", "nul" → "null").
+    4. Unclosed braces / brackets — model stopped generating before closing
+       the outer object (e.g. output ends with "is_final": true, missing }).
+    5. Single-quoted strings → double-quoted (rare but seen).
+
+    Returns the repaired string. If repair leaves the string unchanged, the
+    caller will receive the original parse error.
+    """
+    # 1. Ellipsis: bare ... inside arrays/objects
+    #    Handles: , ...] / , ..., / [..., ...] / [... "x"]
+    text = re.sub(r",\s*\.\.\.\s*([,\]\}])", r"\1", text)  # ", ..." followed by , ] }
+    text = re.sub(r"\[\s*\.\.\.\s*,",        r"[",  text)  # "[..." at array start
+    text = re.sub(r",\s*\.\.\.\s*\]",        r"]",  text)  # remaining ", ...]"
+
+    # 2. Trailing commas before ] or }
+    text = re.sub(r",\s*(\]|\})", r"\1", text)
+
+    # 3. Truncated literals at end of string (model cut off mid-token)
+    text = text.rstrip()
+    for full, prefixes in [
+        ("true",  ["tru", "tr", "t"]),
+        ("false", ["fals", "fal", "fa", "f"]),
+        ("null",  ["nul", "nu", "n"]),
+    ]:
+        for prefix in prefixes:
+            if text.endswith(prefix):
+                text = text[: -len(prefix)] + full
+                break
+
+    # 4. Close unclosed braces/brackets — walk outside strings tracking depth
+    _OPENERS = {"{": "}", "[": "]"}
+    _CLOSERS = {"}", "]"}
+    stack: list[str] = []
+    in_str = False
+    skip   = False
+    for ch in text:
+        if skip:
+            skip = False
+            continue
+        if ch == "\\" and in_str:
+            skip = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if not in_str:
+            if ch in _OPENERS:
+                stack.append(_OPENERS[ch])
+            elif ch in _CLOSERS and stack and stack[-1] == ch:
+                stack.pop()
+    text += "".join(reversed(stack))
+
+    # 5. Single-quoted strings → double-quoted (narrow: no internal single quotes)
+    text = re.sub(r"'([^']*)'", r'"\1"', text)
+
+    return text
+
+
 def _parse_action(raw: str) -> AgentAction:
     text = raw.strip()
-    # 1. Strip markdown fences first
+    # 1. Strip markdown fences
     m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
     if m:
         text = m.group(1).strip()
-    # 2. Extract the outermost JSON object (handles preamble prose from local models)
+    # 2. Extract outermost JSON object (discards preamble prose)
     text = _extract_json_object(text)
+    # 3. Attempt parse; on failure apply repairs and retry once
     try:
         data = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Not valid JSON: {exc}") from exc
+    except json.JSONDecodeError:
+        repaired = _repair_json(text)
+        try:
+            data = json.loads(repaired)
+            logger.info("_parse_action: repaired malformed JSON (len %d→%d)", len(text), len(repaired))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Not valid JSON: {exc}") from exc
     return AgentAction.model_validate(data)
 
 
@@ -227,7 +308,7 @@ class LoopAgent:
                         agent="loop_agent",
                         attempt=attempt,
                         error=last_error,
-                        raw_response=raw[:500],
+                        raw_response=raw[:8000],
                         step_id=step_id,
                     ))
                     continue
@@ -244,7 +325,7 @@ class LoopAgent:
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
                     duration_ms=duration_ms,
-                    payload={"raw_text": raw[:500]},
+                    payload={"raw_text": raw[:8000]},
                     attempt=attempt,
                 ))
                 return action, result.input_tokens, result.output_tokens
@@ -257,7 +338,7 @@ class LoopAgent:
                     agent="loop_agent",
                     attempt=attempt,
                     error=last_error,
-                    raw_response=raw[:500],
+                    raw_response=raw[:8000],
                     step_id=step_id,
                 ))
 
