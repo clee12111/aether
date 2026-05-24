@@ -80,7 +80,7 @@ class CriticAgent:
             f"RUN_ID: {run_id}\n"
             f"GOAL: {goal}\n"
             f"PLAN STEPS: {step_names}\n"
-            f"EXECUTOR OUTPUT: {json.dumps(executor_output, default=str)[:2000]}\n\n"
+            f"EXECUTOR OUTPUT: {json.dumps(executor_output, default=str)[:8000]}\n\n"
             "Return the CritiqueResult JSON."
         )
         last_error: str | None = None

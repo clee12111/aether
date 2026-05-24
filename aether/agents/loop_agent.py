@@ -65,11 +65,46 @@ OUTPUT FORMAT — strict JSON, no markdown fences, no extra text:
 }"""
 
 
+_OBS_MAX_CHARS = 4000   # hard ceiling — matches trace storage cap
+_OBS_MAX_ROWS  = 50     # for tabular results, show at most this many rows
+
+
 def _summarise_observation(output: dict, error: str | None) -> str:
     if error:
         return f"ERROR: {error}"
+
+    # Tabular result from run_sql — format as whole rows, never cut mid-row
+    if isinstance(output, dict) and "rows" in output and "columns" in output:
+        cols = output["columns"]
+        rows = output["rows"]
+        total = output.get("row_count", len(rows))
+
+        header = f"columns={cols}  row_count={total}"
+        if not rows:
+            return f"{header}  rows=[]"
+
+        visible = rows[:_OBS_MAX_ROWS]
+        row_lines = [f"  {r}" for r in visible]
+        omitted = total - len(visible)
+        suffix = f"\n  ... {omitted} more rows" if omitted > 0 else ""
+
+        body = header + "\n" + "\n".join(row_lines) + suffix
+        # Final safety cap — never exceed _OBS_MAX_CHARS (whole-row boundary)
+        if len(body) <= _OBS_MAX_CHARS:
+            return body
+
+        # Trim whole rows until we fit
+        while row_lines and len(body) > _OBS_MAX_CHARS:
+            row_lines.pop()
+            shown = len(row_lines)
+            omitted = total - shown
+            suffix = f"\n  ... {omitted} more rows"
+            body = header + "\n" + "\n".join(row_lines) + suffix
+        return body
+
+    # Non-tabular output — plain string with generous cap
     s = str(output)
-    return s[:200] + ("..." if len(s) > 200 else "")
+    return s[:_OBS_MAX_CHARS] + ("..." if len(s) > _OBS_MAX_CHARS else "")
 
 
 def _build_prompt(state: LoopState, file_paths: list[str] | None = None) -> str:
@@ -99,7 +134,7 @@ def _build_prompt(state: LoopState, file_paths: list[str] | None = None) -> str:
         lines = ["PRIOR STEPS:"]
         for ls in state.steps:
             reasoning_short = ls.action.reasoning[:80] + ("..." if len(ls.action.reasoning) > 80 else "")
-            args_short = str(ls.action.tool_args)[:120] + ("..." if len(str(ls.action.tool_args)) > 120 else "")
+            args_short = str(ls.action.tool_args)[:400] + ("..." if len(str(ls.action.tool_args)) > 400 else "")
             obs_short = _summarise_observation(ls.observation.output, ls.observation.error)
             lines.append(
                 f"  [{ls.step_index}] reasoning=\"{reasoning_short}\"\n"
