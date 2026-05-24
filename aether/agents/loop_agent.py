@@ -47,12 +47,12 @@ retrieve_context
   {"query": "<search string>", "top_k": 5}
   Retrieves relevant document chunks from the corpus. Use if you need more context mid-task.
 
-answer_from_context
+answer_from_context  [OPTIONAL]
   {"question": "<the question to answer>", "context": ["<chunk text 1>", "<chunk text 2>", ...]}
-  Synthesizes a grounded answer from retrieved text evidence. Use this for questions that require
-  reasoning over document text (not tabular computation). Pass the chunk texts from a prior
-  retrieve_context call as the context list. Returns {"answer": str, "grounded": bool,
-  "insufficient_context": bool}. If insufficient_context is true, retrieve more chunks first.
+  OPTIONAL: use when you want an explicitly grounded, fabrication-guarded synthesis step
+  (useful for high-stakes or sparse-evidence questions). Pass chunk texts from a prior
+  retrieve_context call. Returns {"answer": str, "grounded": bool, "insufficient_context": bool}.
+  If insufficient_context is true, retrieve more chunks first, then retry.
 
 JSON RULES — your output is machine-parsed; these cause hard failures:
 - No markdown fences (no ```json), no prose before or after the JSON object.
@@ -371,7 +371,18 @@ class LoopAgent:
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
                     duration_ms=duration_ms,
-                    payload={"raw_text": raw[:8000]},
+                    payload={
+                        "raw_text": raw[:8000],
+                        # reasoning promoted as a first-class field so it is
+                        # always fully captured and directly queryable via
+                        # json_extract(payload, '$.reasoning') — independent
+                        # of the raw_text 8000-char cap and without requiring
+                        # nested JSON parsing. This is the canonical audit
+                        # trail for implicit synthesis reasoning.
+                        "reasoning": action.reasoning,
+                        "tool": action.tool,
+                        "is_final": action.is_final,
+                    },
                     attempt=attempt,
                 ))
                 return action, result.input_tokens, result.output_tokens
