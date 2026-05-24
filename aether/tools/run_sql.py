@@ -23,12 +23,12 @@ class RunSQLTool(BaseTool):
             rewritten = _try_cte_rewrite(sql)
             if rewritten is None:
                 conn.close()
-                raise
+                raise _augment_error(original_exc, sql)
             try:
                 result = conn.execute(rewritten)
             except Exception:
                 conn.close()
-                raise original_exc
+                raise _augment_error(original_exc, sql)
 
         columns = [desc[0] for desc in result.description]
         rows = result.fetchall()
@@ -39,6 +39,27 @@ class RunSQLTool(BaseTool):
             "rows": [list(r) for r in rows],
             "row_count": len(rows),
         }
+
+
+def _augment_error(exc: Exception, sql: str) -> Exception:
+    """Return exc unchanged, or a new exception with an actionable hint appended."""
+    msg = str(exc)
+    upper = sql.strip().upper()
+
+    # Detect incomplete CTE: WITH clause present but missing a trailing SELECT
+    if "SYNTAX ERROR AT END OF INPUT" in msg.upper() and upper.startswith("WITH"):
+        # Extract the last CTE name for the hint (WITH <name> AS ...)
+        cte_name_match = re.search(r"\bWITH\s+(\w+)\s+AS\s*\(", sql, re.IGNORECASE)
+        # Find last CTE name in multi-CTE chains
+        all_cte_names = re.findall(r"(?:WITH|,)\s+(\w+)\s+AS\s*\(", sql, re.IGNORECASE)
+        last_cte = all_cte_names[-1] if all_cte_names else "cte"
+        hint = (
+            f" HINT: Your CTE is defined but missing a final SELECT statement. "
+            f"Add 'SELECT * FROM {last_cte}' after the closing parenthesis."
+        )
+        return type(exc)(msg + hint)
+
+    return exc
 
 
 def _try_cte_rewrite(sql: str) -> str | None:

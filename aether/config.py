@@ -28,6 +28,9 @@ class Settings(BaseSettings):
 
     # ── Anthropic ─────────────────────────────────────────────────────────────
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API key (required only if a provider == 'anthropic')")
+
+    # ── OpenAI ────────────────────────────────────────────────────────────────
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key (required only if a provider == 'openai')")
     claude_model: str = Field(
         default="claude-sonnet-4-6",
         description="Model ID used for all agent calls",
@@ -44,6 +47,10 @@ class Settings(BaseSettings):
     # local model names (used when provider == 'ollama')
     planner_model_local: str = Field(default="mistral", description="local planner model")
     critic_model_local: str = Field(default="phi4-mini", description="local critic model")
+
+    # OpenAI model names (used when provider == 'openai')
+    planner_model_openai: str = Field(default="gpt-5.4-mini", description="OpenAI planner model")
+    critic_model_openai: str = Field(default="gpt-5.4-mini", description="OpenAI critic model")
     max_retries: int = Field(
         default=2,
         ge=1,

@@ -58,5 +58,24 @@ def chat(
             output_tokens=resp.usage.output_tokens,
         )
 
+    elif provider == "openai":
+        from openai import OpenAI
+        client = OpenAI(api_key=settings.openai_api_key)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_completion_tokens=max_tokens,
+            temperature=0,
+        )
+        usage = resp.usage
+        return ChatResult(
+            text=resp.choices[0].message.content or "",
+            input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+            output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+        )
+
     else:
         raise ValueError(f"Unknown provider: {provider!r}")

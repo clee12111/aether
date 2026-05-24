@@ -45,11 +45,19 @@ User Goal + Documents
 5. Direct SDK. No LangChain/CrewAI. (LangGraph: only after hand-rolling.)
 
 ## Model Routing (per-agent, provider-switchable)
-- Each agent (planner, critic) has a provider: "ollama" or "anthropic".
-- Local default: Ollama (OpenAI-compatible endpoint, local CPU inference).
-- Anthropic path preserved for the API baseline in the forensic study.
-- Executor: NO model (deterministic). The old executor_model config is 
+- Each agent (planner, critic) has a provider: "ollama", "openai", or "anthropic".
+- DEFAULT (current): OpenAI gpt-5.4-mini for both planner and critic.
+  Set via PLANNER_PROVIDER=openai / CRITIC_PROVIDER=openai in .env.
+  Model: planner_model_openai / critic_model_openai = "gpt-5.4-mini".
+- Local fallback: Ollama (OpenAI-compatible endpoint, CPU inference).
+  Preserved as documented fallback AND forensic comparison baseline.
+  Do NOT delete. Switch via PLANNER_PROVIDER=ollama / CRITIC_PROVIDER=ollama.
+  Local models: planner_model_local=mistral, critic_model_local=phi4-mini.
+- Anthropic path preserved for future API baseline comparisons.
+- Executor: NO model (deterministic). The old executor_model config is
   REMOVED — do not re-add it.
+- Retriever, trace store, executor, embeddings: always LOCAL (no provider
+  routing — ChromaDB, SQLite, sentence-transformers run on-machine).
 
 ## Local Model Infra (current reality)
 - Ollama on CPU. GPU (AMD RX 6600 XT / gfx1032) is NOT used — Windows ROCm 

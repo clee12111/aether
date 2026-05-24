@@ -90,8 +90,12 @@ class CriticAgent:
                 user_prompt + f"\n\nPrevious response failed validation: {last_error}\nFix and return valid JSON only."
             )
             provider = self.settings.critic_provider
-            model = (self.settings.critic_model_local if provider == "ollama"
-                     else self.settings.critic_model)
+            if provider == "ollama":
+                model = self.settings.critic_model_local
+            elif provider == "openai":
+                model = self.settings.critic_model_openai
+            else:
+                model = self.settings.critic_model
 
             logger.info("Critic calling API (attempt %d/%d) provider=%s model=%s",
                         attempt, self.settings.max_retries, provider, model)

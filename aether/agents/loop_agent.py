@@ -248,8 +248,12 @@ class LoopAgent:
         last_in_tok, last_out_tok = 0, 0
 
         provider = self.settings.planner_provider
-        model = (self.settings.planner_model_local if provider == "ollama"
-                 else self.settings.planner_model)
+        if provider == "ollama":
+            model = self.settings.planner_model_local
+        elif provider == "openai":
+            model = self.settings.planner_model_openai
+        else:
+            model = self.settings.planner_model
 
         for attempt in range(1, self.settings.max_retries + 1):
             prompt = user_prompt

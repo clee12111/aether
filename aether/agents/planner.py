@@ -85,8 +85,12 @@ class PlannerAgent:
                 prompt += f"\n\nYour last response failed validation: {last_error}\nFix it and return valid JSON only."
 
             provider = self.settings.planner_provider
-            model = (self.settings.planner_model_local if provider == "ollama"
-                     else self.settings.planner_model)
+            if provider == "ollama":
+                model = self.settings.planner_model_local
+            elif provider == "openai":
+                model = self.settings.planner_model_openai
+            else:
+                model = self.settings.planner_model
 
             logger.info("Planner calling API (attempt %d/%d) provider=%s model=%s",
                         attempt, self.settings.max_retries, provider, model)
