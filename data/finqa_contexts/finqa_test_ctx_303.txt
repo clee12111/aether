@@ -1,0 +1,17 @@
+supplementary information on oil and gas producing activities ( unaudited ) c o n t i n u e d summary of changes in standardized measure of discounted future net cash flows relating to proved oil and gas reserves ( in millions ) 2004 2003 2002 sales and transfers of oil and gas produced , net of production , transportation , and administrative costs $ ( 2715 ) $ ( 2487 ) $ ( 1983 ) net changes in prices and production , transportation and administrative costs related to future production 950 1178 2795 ._|    | ( in millions )                                                                                           | 2004             | 2003             | 2002             |
+|---:|:----------------------------------------------------------------------------------------------------------|:-----------------|:-----------------|:-----------------|
+|  0 | sales and transfers of oil and gas produced net of production transportation and administrative costs     | $ -2715 ( 2715 ) | $ -2487 ( 2487 ) | $ -1983 ( 1983 ) |
+|  1 | net changes in prices and production transportation and administrative costs related to future production | 950              | 1178             | 2795             |
+|  2 | extensions discoveries and improved recovery less related costs                                           | 1352             | 618              | 1032             |
+|  3 | development costs incurred during the period                                                              | 711              | 802              | 499              |
+|  4 | changes in estimated future development costs                                                             | -556 ( 556 )     | -478 ( 478 )     | -297 ( 297 )     |
+|  5 | revisions of previous quantity estimates                                                                  | 494              | 348              | 311              |
+|  6 | net changes in purchases and sales of minerals in place                                                   | 33               | -531 ( 531 )     | 737              |
+|  7 | net change in exchanges of minerals in place                                                              | 2013             | 403              | 2013             |
+|  8 | accretion of discount                                                                                     | 790              | 807              | 417              |
+|  9 | net change in income taxes                                                                                | -529 ( 529 )     | 65               | -1288 ( 1288 )   |
+| 10 | timing and other                                                                                          | -62 ( 62 )       | -165 ( 165 )     | 2                |
+| 11 | net change for the year                                                                                   | 468              | 560              | 2225             |
+| 12 | beginning of year                                                                                         | 6001             | 5441             | 3216             |
+| 13 | end of year                                                                                               | $ 6469           | $ 6001           | $ 5441           |
+| 14 | net change for the year from discontinued operations                                                      | $ 2013           | $ -384 ( 384 )   | $ 212            |_.

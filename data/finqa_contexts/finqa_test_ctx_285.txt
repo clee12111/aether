@@ -1,0 +1,18 @@
+schlumberger limited and subsidiaries shares of common stock ( stated in millions ) issued in treasury shares outstanding ._|    |                                                  |   issued | in treasury   | shares outstanding   |
+|---:|:-------------------------------------------------|---------:|:--------------|:---------------------|
+|  0 | balance january 1 2010                           |     1334 | -139 ( 139 )  | 1195                 |
+|  1 | acquisition of smith international inc .         |      100 | 76            | 176                  |
+|  2 | shares sold to optionees less shares exchanged   |     2013 | 6             | 6                    |
+|  3 | shares issued under employee stock purchase plan |     2013 | 3             | 3                    |
+|  4 | stock repurchase program                         |     2013 | -27 ( 27 )    | -27 ( 27 )           |
+|  5 | issued on conversions of debentures              |     2013 | 8             | 8                    |
+|  6 | balance december 31 2010                         |     1434 | -73 ( 73 )    | 1361                 |
+|  7 | shares sold to optionees less shares exchanged   |     2013 | 6             | 6                    |
+|  8 | vesting of restricted stock                      |     2013 | 1             | 1                    |
+|  9 | shares issued under employee stock purchase plan |     2013 | 3             | 3                    |
+| 10 | stock repurchase program                         |     2013 | -37 ( 37 )    | -37 ( 37 )           |
+| 11 | balance december 31 2011                         |     1434 | -100 ( 100 )  | 1334                 |
+| 12 | shares sold to optionees less shares exchanged   |     2013 | 4             | 4                    |
+| 13 | shares issued under employee stock purchase plan |     2013 | 4             | 4                    |
+| 14 | stock repurchase program                         |     2013 | -14 ( 14 )    | -14 ( 14 )           |
+| 15 | balance december 31 2012                         |     1434 | -106 ( 106 )  | 1328                 |_see the notes to consolidated financial statements .

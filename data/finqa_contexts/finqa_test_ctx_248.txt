@@ -1,0 +1,20 @@
+part i item 1 entergy corporation , domestic utility companies , and system energy research spending entergy is a member of the electric power research institute ( epri ) .
+epri conducts a broad range of research in major technical fields related to the electric utility industry .
+entergy participates in various epri projects based on entergy's needs and available resources .
+the domestic utility companies contributed $ 1.5 million in 2003 , $ 2.1 million in 2002 , and $ 4 million in 2001 to epri .
+the non-utility nuclear business contributed $ 3 million in 2003 and 2002 and $ 2 million in 2001 to epri .
+employees employees are an integral part of entergy's commitment to serving its customers .
+as of december 31 , 2003 , entergy employed 14773 people. ._|    | entergy arkansas           | 1516   |
+|---:|:---------------------------|:-------|
+|  0 | entergy gulf states        | 1676   |
+|  1 | entergy louisiana          | 918    |
+|  2 | entergy mississippi        | 810    |
+|  3 | entergy new orleans        | 375    |
+|  4 | system energy              | -      |
+|  5 | entergy operations         | 2902   |
+|  6 | entergy services           | 2755   |
+|  7 | entergy nuclear operations | 3357   |
+|  8 | other subsidiaries         | 255    |
+|  9 | total full-time            | 14564  |
+| 10 | part-time                  | 209    |
+| 11 | total entergy              | 14773  |_approximately 4900 employees are represented by the international brotherhood of electrical workers union , the utility workers union of america , and the international brotherhood of teamsters union. .

@@ -1,0 +1,10 @@
+{
+  "n_done": 200,
+  "n_match": 137,
+  "score_pct": 68.5,
+  "n_sql_available": 200,
+  "n_sql_used": 154,
+  "n_ok": 191,
+  "n_error": 1,
+  "n_max_steps": 8
+}

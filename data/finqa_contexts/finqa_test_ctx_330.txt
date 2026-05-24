@@ -1,0 +1,20 @@
+the fair value of our total investments increased $ 4.8 billion during 2010 , primarily due to unrealized appreciation , the inves- ting of operating cash flows , and the portfolios acquired in the 2010 corporate acquisitions .
+the following tables show the market value of our fixed maturities and short-term investments at december 31 , 2010 and 2009 .
+the first table lists investments according to type and the second according to s&p credit rating. ._|    | ( in millions of u.s . dollars except for percentages )   | 2010 market value   | 2010 percentage of total   | 2010 market value   | percentageof total   |
+|---:|:----------------------------------------------------------|:--------------------|:---------------------------|:--------------------|:---------------------|
+|  0 | treasury                                                  | $ 2075              | 4% ( 4 % )                 | $ 2068              | 5% ( 5 % )           |
+|  1 | agency                                                    | 2015                | 4% ( 4 % )                 | 2698                | 6% ( 6 % )           |
+|  2 | corporate and asset-backed securities                     | 15900               | 33% ( 33 % )               | 13537               | 30% ( 30 % )         |
+|  3 | mortgage-backed securities                                | 12362               | 25% ( 25 % )               | 11311               | 25% ( 25 % )         |
+|  4 | municipal                                                 | 2449                | 5% ( 5 % )                 | 2300                | 5% ( 5 % )           |
+|  5 | non-u.s .                                                 | 12199               | 25% ( 25 % )               | 11172               | 25% ( 25 % )         |
+|  6 | short-term investments                                    | 1983                | 4% ( 4 % )                 | 1667                | 4% ( 4 % )           |
+|  7 | total                                                     | $ 48983             | 100% ( 100 % )             | $ 44753             | 100% ( 100 % )       |
+|  8 | aaa                                                       | $ 23718             | 48% ( 48 % )               | $ 22884             | 51% ( 51 % )         |
+|  9 | aa                                                        | 4714                | 10% ( 10 % )               | 4021                | 9% ( 9 % )           |
+| 10 | a                                                         | 8482                | 17% ( 17 % )               | 7461                | 17% ( 17 % )         |
+| 11 | bbb                                                       | 5487                | 11% ( 11 % )               | 4910                | 11% ( 11 % )         |
+| 12 | bb                                                        | 3357                | 7% ( 7 % )                 | 2866                | 6% ( 6 % )           |
+| 13 | b                                                         | 2393                | 5% ( 5 % )                 | 2029                | 5% ( 5 % )           |
+| 14 | other                                                     | 832                 | 2% ( 2 % )                 | 582                 | 1% ( 1 % )           |
+| 15 | total                                                     | $ 48983             | 100% ( 100 % )             | $ 44753             | 100% ( 100 % )       |_.

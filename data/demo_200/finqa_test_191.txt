@@ -1,0 +1,9 @@
+the following shares were excluded from the calculation of average shares outstanding 2013 diluted as their effect was anti- dilutive ( shares in millions ) . ._|    |                                       | 2018   |   2017 |   2016 |
+|---:|:--------------------------------------|:-------|-------:|-------:|
+|  0 | mandatory convertible preferred stock | n/a    |     39 |     39 |
+|  1 | convertible notes                     | 2014   |     14 |     14 |
+|  2 | stock options ( 1 )                   | 9      |     11 |     13 |
+|  3 | stock awards                          | 2014   |      7 |      8 |_( 1 ) the average exercise price of options per share was $ 26.79 , $ 33.32 , and $ 26.93 for 2018 , 2017 , and 2016 , respectively .
+in 2017 , had arconic generated sufficient net income , 30 million , 14 million , 5 million , and 1 million potential shares of common stock related to the mandatory convertible preferred stock , convertible notes , stock awards , and stock options , respectively , would have been included in diluted average shares outstanding .
+the mandatory convertible preferred stock converted on october 2 , 2017 ( see note i ) .
+in 2016 , had arconic generated sufficient net income , 28 million , 10 million , 4 million , and 1 million potential shares of common stock related to the mandatory convertible preferred stock , convertible notes , stock awards , and stock options , respectively , would have been included in diluted average shares outstanding. .
