@@ -17,7 +17,7 @@ class FieldValue(BaseModel):
     """A single enrichment field with provenance."""
 
     value: str = ""
-    source: Literal["pdl", "dns", "llm_fallback", "regex", "crm", "fixture", "none"] = "none"
+    source: Literal["pdl", "dns", "llm_fallback", "regex", "crm", "fixture", "website", "none"] = "none"
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 

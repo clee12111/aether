@@ -1,0 +1,835 @@
+{
+  "_meta": {
+    "description": "Recorded PDL Person Enrichment API responses for CI replay. No live calls needed.",
+    "recorded_from": "https://api.peopledatalabs.com/v5/person/enrich",
+    "note": "Fictional emails return synthetic cassettes matching PDL response shape. Real emails trimmed to relevant fields."
+  },
+  "sean@peopledatalabs.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 6,
+      "data": {
+        "full_name": "sean thorne",
+        "first_name": "sean",
+        "last_name": "thorne",
+        "job_title": "president",
+        "job_title_role": "operations",
+        "job_title_levels": [
+          "cxo"
+        ],
+        "job_company_name": "the copernican project",
+        "job_company_size": null,
+        "job_company_industry": null,
+        "industry": "computer software",
+        "work_email": false
+      }
+    }
+  },
+  "j.martinez@acmefintech.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 8,
+      "data": {
+        "full_name": "julia martinez",
+        "first_name": "julia",
+        "last_name": "martinez",
+        "job_title": "vp of sales",
+        "job_title_role": "sales",
+        "job_title_levels": [
+          "vp"
+        ],
+        "job_company_name": "acme fintech international",
+        "job_company_size": "501-1000",
+        "job_company_industry": "financial services",
+        "industry": "financial services",
+        "work_email": true
+      }
+    }
+  },
+  "mark.chen@cloudtechgroup.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "mark chen",
+        "first_name": "mark",
+        "last_name": "chen",
+        "job_title": "engineering manager",
+        "job_title_role": "engineering",
+        "job_title_levels": [
+          "manager"
+        ],
+        "job_company_name": "cloud tech group",
+        "job_company_size": "51-200",
+        "job_company_industry": "information technology and services",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "alex.kumar@smallstartup.io": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 4,
+      "data": {
+        "full_name": "alex kumar",
+        "first_name": "alex",
+        "last_name": "kumar",
+        "job_title": "software developer",
+        "job_title_role": "engineering",
+        "job_title_levels": [
+          "entry"
+        ],
+        "job_company_name": "small startup llc",
+        "job_company_size": "1-10",
+        "job_company_industry": null,
+        "industry": null,
+        "work_email": true
+      }
+    }
+  },
+  "randomuser123@gmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "test@gmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "sarah.jones@gmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "s.chen@medvista.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 9,
+      "data": {
+        "full_name": "dr. sarah chen",
+        "first_name": "sarah",
+        "last_name": "chen",
+        "job_title": "chief medical officer",
+        "job_title_role": "medical",
+        "job_title_levels": [
+          "cxo"
+        ],
+        "job_company_name": "medvista healthcare",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "hospital & health care",
+        "industry": "hospital & health care",
+        "work_email": true
+      }
+    }
+  },
+  "m.rodriguez@datastream.io": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 8,
+      "data": {
+        "full_name": "mike rodriguez",
+        "first_name": "mike",
+        "last_name": "rodriguez",
+        "job_title": "chief technology officer",
+        "job_title_role": "engineering",
+        "job_title_levels": [
+          "cxo"
+        ],
+        "job_company_name": "datastream software",
+        "job_company_size": "51-200",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "noreply@bounce-system.net": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "david.m@gmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "r.thompson@globalbank.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 3,
+      "data": {
+        "full_name": "robert thompson",
+        "first_name": "robert",
+        "last_name": "thompson",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "global banking corporation",
+        "job_company_size": "10001+",
+        "job_company_industry": "banking",
+        "industry": "banking",
+        "work_email": true
+      }
+    }
+  },
+  "founder@tinystartup.co": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 5,
+      "data": {
+        "full_name": "alex rivera",
+        "first_name": "alex",
+        "last_name": "rivera",
+        "job_title": "vp of engineering",
+        "job_title_role": "engineering",
+        "job_title_levels": [
+          "vp"
+        ],
+        "job_company_name": "tinystartup",
+        "job_company_size": "1-10",
+        "job_company_industry": null,
+        "industry": null,
+        "work_email": true
+      }
+    }
+  },
+  "cfo@nationwide-ins.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 9,
+      "data": {
+        "full_name": "patricia walsh",
+        "first_name": "patricia",
+        "last_name": "walsh",
+        "job_title": "chief financial officer",
+        "job_title_role": "finance",
+        "job_title_levels": [
+          "cxo"
+        ],
+        "job_company_name": "nationwide insurance group",
+        "job_company_size": "10001+",
+        "job_company_industry": "insurance",
+        "industry": "insurance",
+        "work_email": true
+      }
+    }
+  },
+  "d.eng@atlas-cloud.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "derek eng",
+        "first_name": "derek",
+        "last_name": "eng",
+        "job_title": "director of engineering",
+        "job_title_role": "engineering",
+        "job_title_levels": [
+          "director"
+        ],
+        "job_company_name": "atlas cloud solutions",
+        "job_company_size": "201-500",
+        "job_company_industry": "information technology and services",
+        "industry": "information technology and services",
+        "work_email": true
+      }
+    }
+  },
+  "m.tanaka@stripe.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "mei tanaka",
+        "first_name": "mei",
+        "last_name": "tanaka",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Stripe",
+        "job_company_size": "5001-10000",
+        "job_company_industry": "financial services",
+        "industry": "financial services",
+        "work_email": true
+      }
+    }
+  },
+  "r.okafor@deloitte.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "remi okafor",
+        "first_name": "remi",
+        "last_name": "okafor",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Deloitte",
+        "job_company_size": "10001+",
+        "job_company_industry": "management consulting",
+        "industry": "management consulting",
+        "work_email": true
+      }
+    }
+  },
+  "c.wade@pfizer.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "catherine wade",
+        "first_name": "catherine",
+        "last_name": "wade",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Pfizer",
+        "job_company_size": "10001+",
+        "job_company_industry": "pharmaceuticals",
+        "industry": "pharmaceuticals",
+        "work_email": true
+      }
+    }
+  },
+  "j.fischer@siemens.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "jonas fischer",
+        "first_name": "jonas",
+        "last_name": "fischer",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Siemens",
+        "job_company_size": "10001+",
+        "job_company_industry": "industrial automation",
+        "industry": "industrial automation",
+        "work_email": true
+      }
+    }
+  },
+  "a.reeves@visa.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "amanda reeves",
+        "first_name": "amanda",
+        "last_name": "reeves",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Visa",
+        "job_company_size": "10001+",
+        "job_company_industry": "financial services",
+        "industry": "financial services",
+        "work_email": true
+      }
+    }
+  },
+  "l.chen@hubspot.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "lily chen",
+        "first_name": "lily",
+        "last_name": "chen",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "HubSpot",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "n.patel@adobe.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "nisha patel",
+        "first_name": "nisha",
+        "last_name": "patel",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Adobe",
+        "job_company_size": "10001+",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "f.moreira@nubank.com.br": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "felipe moreira",
+        "first_name": "felipe",
+        "last_name": "moreira",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Nubank",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "financial services",
+        "industry": "financial services",
+        "work_email": true
+      }
+    }
+  },
+  "s.wright@twilio.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "sam wright",
+        "first_name": "sam",
+        "last_name": "wright",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Twilio",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "information technology and services",
+        "industry": "information technology and services",
+        "work_email": true
+      }
+    }
+  },
+  "k.yamamoto@toyota.co.jp": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "kenji yamamoto",
+        "first_name": "kenji",
+        "last_name": "yamamoto",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Toyota",
+        "job_company_size": "10001+",
+        "job_company_industry": "automotive",
+        "industry": "automotive",
+        "work_email": true
+      }
+    }
+  },
+  "d.santos@merck.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "diego santos",
+        "first_name": "diego",
+        "last_name": "santos",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Merck",
+        "job_company_size": "10001+",
+        "job_company_industry": "pharmaceuticals",
+        "industry": "pharmaceuticals",
+        "work_email": true
+      }
+    }
+  },
+  "e.brook@lemonade.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "emily brook",
+        "first_name": "emily",
+        "last_name": "brook",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Lemonade",
+        "job_company_size": "201-500",
+        "job_company_industry": "insurance",
+        "industry": "insurance",
+        "work_email": true
+      }
+    }
+  },
+  "m.lee@databricks.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "min lee",
+        "first_name": "min",
+        "last_name": "lee",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Databricks",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "hr@nvidia.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "tara lin",
+        "first_name": "tara",
+        "last_name": "lin",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "NVIDIA",
+        "job_company_size": "10001+",
+        "job_company_industry": "semiconductors",
+        "industry": "semiconductors",
+        "work_email": true
+      }
+    }
+  },
+  "a.novak@plaid.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "a novak",
+        "first_name": "a",
+        "last_name": "novak",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Plaid",
+        "job_company_size": "201-500",
+        "job_company_industry": "financial services",
+        "industry": "financial services",
+        "work_email": true
+      }
+    }
+  },
+  "l.garcia@boeing.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "lucia garcia",
+        "first_name": "lucia",
+        "last_name": "garcia",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Boeing",
+        "job_company_size": "10001+",
+        "job_company_industry": "aviation & aerospace",
+        "industry": "aviation & aerospace",
+        "work_email": true
+      }
+    }
+  },
+  "r.kim@uber.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "rachel kim",
+        "first_name": "rachel",
+        "last_name": "kim",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Uber",
+        "job_company_size": "10001+",
+        "job_company_industry": "internet",
+        "industry": "internet",
+        "work_email": true
+      }
+    }
+  },
+  "p.wong@robinhood.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "peter wong",
+        "first_name": "peter",
+        "last_name": "wong",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Robinhood",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "financial services",
+        "industry": "financial services",
+        "work_email": true
+      }
+    }
+  },
+  "events@mongodb.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "events team",
+        "first_name": "events",
+        "last_name": "team",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "MongoDB",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "intern.2026@figma.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "jordan xu",
+        "first_name": "jordan",
+        "last_name": "xu",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Figma",
+        "job_company_size": "501-1000",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "compliance@jpmorgan.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "compliance team",
+        "first_name": "compliance",
+        "last_name": "team",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "JPMorgan Chase",
+        "job_company_size": "10001+",
+        "job_company_industry": "banking",
+        "industry": "banking",
+        "work_email": true
+      }
+    }
+  },
+  "p.kumar@gmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "alex.z@outlook.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "freelancer99@protonmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "x9z@yopmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "bot@tempmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "7ksdf@guerrillamail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "return@mailer-daemon.invalid": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "offers@bestdeals247.biz": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "info@localbakery.co": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "student42@mit.edu": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "webmaster@ci.portland.or.us": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "volunteer@redcross.org": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "enquiries@oscr.scot": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "cto.office@gmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  }
+}

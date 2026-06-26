@@ -15,6 +15,7 @@ at startup and reused across requests.
 Config via environment variables:
   GTM_PROVIDER       — "mock" (default) or "openai"
   GTM_MODEL          — model name (default "gpt-4o-mini")
+  ENRICHMENT_PROVIDER — "mock" (regex, default) or "pdl" (waterfall)
   CRM_BACKEND        — "sqlite" (default) or "hubspot"
   GTM_CRM_DB         — CRM SQLite path (default "gtm_crm.db"); ignored if hubspot
   GTM_TRACE_DB       — trace SQLite path (default "gtm_trace.db"); ignored if DATABASE_URL
@@ -125,9 +126,20 @@ async def _lifespan(app: FastAPI):
     else:
         _trace = TraceStore(trace_path)
 
+    # Build enrichment provider based on ENRICHMENT_PROVIDER env
+    enrichment_backend = os.environ.get("ENRICHMENT_PROVIDER", "mock")
+    enrichment_provider = None
+    if enrichment_backend == "pdl":
+        from pathlib import Path
+        from gtm_triage.enrichment.pdl_provider import PDLProvider
+        from gtm_triage.enrichment.waterfall import WaterfallProvider
+        cassettes = Path(__file__).parent / "enrichment" / "cache" / "pdl_cassettes.json"
+        pdl = PDLProvider(cache_path=cassettes if cassettes.exists() else None)
+        enrichment_provider = WaterfallProvider(pdl, skip_dns=False, skip_website=True)
+
     registry = ToolRegistry([
         CRMLookupTool(_crm),
-        EnrichLeadTool(provider=_provider, model=_model),
+        EnrichLeadTool(provider=_provider, model=_model, enrichment_provider=enrichment_provider),
         ScoreLeadTool(provider=_provider, model=_model),
         DraftOutreachTool(),
     ])
@@ -214,7 +226,7 @@ def triage(req: TriageRequest) -> dict[str, Any]:
         ])
         eff_executor = Executor(eff_registry, _trace)
     else:
-        eff_executor = _executor
+        eff_executor = _executor  # uses enrichment_provider if configured
 
     # Run the agent
     lead = Lead(

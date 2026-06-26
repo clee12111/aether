@@ -1,8 +1,10 @@
-"""Lead enrichment tool with regex + optional LLM fallback.
+"""Lead enrichment tool — delegates to an EnrichmentProvider.
 
-When provider="mock" (default): regex-only, fully deterministic.
-When provider="openai": regex first, then LLM fills in any "unknown" fields.
-Per-field source is recorded: "regex" or "llm".
+When an EnrichmentProvider is injected, it is used directly (waterfall, PDL,
+fixture, etc.). When no provider is injected, falls back to the legacy
+regex + optional LLM path for backward compatibility (provider="mock"/"openai").
+
+The tool always returns a flat dict compatible with score_lead's expectations.
 """
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ import re
 from gtm_triage.tools.base import BaseTool
 
 logger = logging.getLogger(__name__)
+
+# ── Legacy regex path (kept for provider="mock" backward compat) ──────────────
 
 # Free-email domains — leads from these are capped at warm
 FREE_DOMAINS = {
@@ -90,9 +94,21 @@ def _infer_seniority(name: str, message: str) -> tuple[str, str]:
 
 
 class EnrichLeadTool(BaseTool):
-    def __init__(self, provider: str = "mock", model: str = "gpt-4o-mini") -> None:
+    """Lead enrichment tool.
+
+    If an EnrichmentProvider is passed, delegates to it and returns its
+    flat dict. Otherwise uses the legacy regex (+LLM) path.
+    """
+
+    def __init__(
+        self,
+        provider: str = "mock",
+        model: str = "gpt-4o-mini",
+        enrichment_provider: "EnrichmentProvider | None" = None,
+    ) -> None:
         self._provider = provider
         self._model = model
+        self._enrichment_provider = enrichment_provider
 
     @property
     def name(self) -> str:
@@ -104,6 +120,16 @@ class EnrichLeadTool(BaseTool):
         name = args.get("name", "")
         message = args.get("message", "")
 
+        # ── New path: delegate to EnrichmentProvider ─────────────────────
+        if self._enrichment_provider is not None:
+            result = self._enrichment_provider.enrich(email, name, company, message)
+            flat = result.to_flat_dict()
+            # Add token placeholders for compatibility
+            flat["llm_tokens_in"] = 0
+            flat["llm_tokens_out"] = 0
+            return flat
+
+        # ── Legacy path: regex + optional LLM fallback ───────────────────
         domain = email.split("@")[-1].lower() if "@" in email else ""
         is_business = domain not in FREE_DOMAINS and domain != ""
 
