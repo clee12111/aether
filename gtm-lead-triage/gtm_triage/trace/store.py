@@ -40,6 +40,13 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 );
 """
 
+_CREATE_DAILY_USAGE = """
+CREATE TABLE IF NOT EXISTS daily_usage (
+    usage_date TEXT PRIMARY KEY,
+    count      INTEGER NOT NULL DEFAULT 0
+);
+"""
+
 _CREATE_IDX = "CREATE INDEX IF NOT EXISTS idx_trace_run ON trace_events(run_id);"
 
 _INSERT = """
@@ -61,6 +68,7 @@ class TraceStore:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute(_CREATE_TABLE)
         self._conn.execute(_CREATE_IDEMPOTENCY)
+        self._conn.execute(_CREATE_DAILY_USAGE)
         self._conn.execute(_CREATE_IDX)
         self._conn.commit()
 
@@ -174,6 +182,38 @@ class TraceStore:
             (key, run_id, json.dumps(result, default=str), now),
         )
         self._conn.commit()
+
+    # ── Daily usage cap ─────────────────────────────────────────────────────
+
+    def get_daily_usage(self) -> int:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        row = self._conn.execute(
+            "SELECT count FROM daily_usage WHERE usage_date = ?", (today,),
+        ).fetchone()
+        return row["count"] if row else 0
+
+    def increment_daily_usage(self) -> int:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        self._conn.execute(
+            "INSERT INTO daily_usage (usage_date, count) VALUES (?, 1) "
+            "ON CONFLICT(usage_date) DO UPDATE SET count = count + 1",
+            (today,),
+        )
+        self._conn.commit()
+        row = self._conn.execute(
+            "SELECT count FROM daily_usage WHERE usage_date = ?", (today,),
+        ).fetchone()
+        return row["count"] if row else 1
+
+    # ── Result lookup by run_id ──────────────────────────────────────────
+
+    def get_result_by_run_id(self, run_id: str) -> dict[str, Any] | None:
+        row = self._conn.execute(
+            "SELECT result FROM idempotency_keys WHERE run_id = ?", (run_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["result"])
 
     def close(self) -> None:
         self._conn.close()

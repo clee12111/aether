@@ -98,7 +98,7 @@ class EnrichLeadTool(BaseTool):
     def name(self) -> str:
         return "enrich_lead"
 
-    def run(self, args: dict) -> dict:
+    def run(self, args: dict, run_id: str = "") -> dict:
         email = args.get("email", "")
         company = args.get("company", "")
         name = args.get("name", "")
@@ -128,6 +128,7 @@ class EnrichLeadTool(BaseTool):
                 inferred, llm_tokens_in, llm_tokens_out = infer_enrichment(
                     email=email, name=name, company=company, message=message,
                     unknown_fields=unknown_fields, model=self._model,
+                    run_id=run_id,
                 )
                 if inferred:
                     if "industry" in unknown_fields and inferred.get("industry", "unknown") != "unknown":

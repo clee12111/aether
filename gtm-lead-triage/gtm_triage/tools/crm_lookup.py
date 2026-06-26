@@ -12,7 +12,7 @@ class CRMLookupTool(BaseTool):
     def name(self) -> str:
         return "crm_lookup"
 
-    def run(self, args: dict) -> dict:
+    def run(self, args: dict, run_id: str = "") -> dict:
         email = args.get("email", "")
         if not email:
             return {"found": False, "error": "email is required"}

@@ -46,7 +46,7 @@ class DraftOutreachTool(BaseTool):
     def name(self) -> str:
         return "draft_outreach"
 
-    def run(self, args: dict) -> dict:
+    def run(self, args: dict, run_id: str = "") -> dict:
         email = args.get("email", "")
         name = args.get("name", "there")
         company = args.get("company", "your company")

@@ -39,7 +39,7 @@ class Executor:
         )
 
         try:
-            result = tool.run(args)
+            result = tool.run(args, run_id=run_id)
             self._trace.write(
                 run_id=run_id,
                 event_type="tool_response",

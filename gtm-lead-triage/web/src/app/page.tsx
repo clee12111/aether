@@ -8,7 +8,9 @@ interface TriageResult {
   run_id: string;
   final_tier: string;
   final_route: string;
-  score?: { points: number; reason: string };
+  score?: { points: number; reason: string; rule_points?: number; llm_adjustment?: number };
+  outreach?: { subject: string; body: string; status: string };
+  enrichment?: Record<string, unknown>;
 }
 
 const TIER_STYLE: Record<string, { bg: string; label: string }> = {
@@ -35,6 +37,72 @@ const ROUTE_LABELS: Record<string, { heading: string; detail: string }> = {
     heading: "Thanks for reaching out",
     detail: "We'll be in touch if there's a fit.",
   },
+};
+
+function uniqueEmail(base: string): string {
+  const ts = Date.now().toString(36);
+  const [local, domain] = base.split("@");
+  return `${local}+${ts}@${domain}`;
+}
+
+const PRESETS = [
+  {
+    label: "Hot buyer",
+    tier: "hot" as const,
+    base: {
+      name: "Julia Martinez, VP of Sales",
+      email: "julia.martinez@acmefintech.com",
+      company: "Acme Fintech International",
+      message: "We need to schedule a demo for our sales team this week. Urgent priority.",
+    },
+  },
+  {
+    label: "Warm evaluator",
+    tier: "warm" as const,
+    base: {
+      name: "Mark Chen, Product Manager",
+      email: "mark.chen@cloudtechgroup.com",
+      company: "CloudTech Group",
+      message: "Exploring tools for our Q3 roadmap. Can you send pricing info?",
+    },
+  },
+  {
+    label: "Cold browser",
+    tier: "cold" as const,
+    base: {
+      name: "Alex Kumar",
+      email: "alex.kumar@smallstartup.io",
+      company: "Small Startup",
+      message: "Just browsing. Saw your site.",
+    },
+  },
+  {
+    label: "Spam",
+    tier: "disqualified" as const,
+    base: {
+      name: "SEO King",
+      email: "promo_king@gmail.com",
+      company: "",
+      message: "Buy cheap SEO backlinks! Best price guaranteed! Visit our site now!",
+    },
+  },
+  {
+    label: "Opt-out",
+    tier: "disqualified" as const,
+    base: {
+      name: "Maria Garcia",
+      email: "maria.g@example-corp.com",
+      company: "Example Corp",
+      message: "Please remove me from your mailing list. Unsubscribe.",
+    },
+  },
+];
+
+const PRESET_TIER_COLOR: Record<string, string> = {
+  hot: "border-red-200 text-red-700 hover:bg-red-50",
+  warm: "border-amber-200 text-amber-700 hover:bg-amber-50",
+  cold: "border-blue-200 text-blue-700 hover:bg-blue-50",
+  disqualified: "border-zinc-200 text-zinc-500 hover:bg-zinc-50",
 };
 
 export default function LeadForm() {
@@ -70,10 +138,7 @@ export default function LeadForm() {
           </div>
           <span className="font-semibold text-sm text-zinc-900">Aether GTM</span>
         </Link>
-        <Link
-          href="/ops"
-          className="text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
-        >
+        <Link href="/ops" className="text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors">
           Ops Dashboard
         </Link>
       </header>
@@ -85,59 +150,47 @@ export default function LeadForm() {
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 mb-1">
                 Get in touch
               </h1>
-              <p className="text-sm text-zinc-500 leading-relaxed mb-8 max-w-[50ch]">
+              <p className="text-sm text-zinc-500 leading-relaxed mb-6 max-w-[50ch]">
                 Tell us about your needs and we&apos;ll route you to the right team.
               </p>
+
+              {/* Presets */}
+              <div className="mb-6">
+                <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide mb-2">Try an example</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => setForm({ ...p.base, email: uniqueEmail(p.base.email) })}
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${PRESET_TIER_COLOR[p.tier]}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="block text-xs font-medium text-zinc-700 mb-1.5">Name</label>
-                  <input
-                    required
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className={inputClass}
-                    placeholder="Julia Martinez, VP of Sales"
-                  />
+                  <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Julia Martinez, VP of Sales" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">
-                    Work email
-                  </label>
-                  <input
-                    required
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className={inputClass}
-                    placeholder="julia@acmecorp.com"
-                  />
+                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">Work email</label>
+                  <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} placeholder="julia@acmecorp.com" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-700 mb-1.5">Company</label>
-                  <input
-                    value={form.company}
-                    onChange={(e) => setForm({ ...form, company: e.target.value })}
-                    className={inputClass}
-                    placeholder="Acme Corp"
-                  />
+                  <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className={inputClass} placeholder="Acme Corp" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-700 mb-1.5">Message</label>
-                  <textarea
-                    required
-                    rows={3}
-                    value={form.message}
-                    onChange={(e) => setForm({ ...form, message: e.target.value })}
-                    className={`${inputClass} resize-none`}
-                    placeholder="We'd like to schedule a demo for our team..."
-                  />
+                  <textarea required rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} className={`${inputClass} resize-none`} placeholder="We'd like to schedule a demo for our team..." />
                 </div>
 
                 {error && (
-                  <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-700">
-                    {error}
-                  </div>
+                  <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
                 )}
 
                 <button
@@ -158,21 +211,16 @@ export default function LeadForm() {
             </>
           ) : (
             <div className="text-center">
-              <div
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold mb-5 ${TIER_STYLE[result.final_tier]?.bg || TIER_STYLE.cold.bg}`}
-              >
+              <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold mb-5 ${TIER_STYLE[result.final_tier]?.bg || TIER_STYLE.cold.bg}`}>
                 {TIER_STYLE[result.final_tier]?.label || result.final_tier}
-                {result.score && (
-                  <span className="opacity-60 font-mono">{result.score.points} pts</span>
-                )}
+                {result.score && <span className="opacity-60 font-mono">{result.score.points} pts</span>}
               </div>
 
               <h2 className="text-xl font-semibold tracking-tight text-zinc-900 mb-2">
                 {ROUTE_LABELS[result.final_route]?.heading || "Request received"}
               </h2>
               <p className="text-sm text-zinc-500 leading-relaxed mb-8 max-w-[45ch] mx-auto">
-                {ROUTE_LABELS[result.final_route]?.detail ||
-                  "Your request has been routed to the appropriate team."}
+                {ROUTE_LABELS[result.final_route]?.detail || "Your request has been routed to the appropriate team."}
               </p>
 
               {result.score?.reason && (
@@ -182,10 +230,7 @@ export default function LeadForm() {
               )}
 
               <button
-                onClick={() => {
-                  setResult(null);
-                  setForm({ name: "", email: "", company: "", message: "" });
-                }}
+                onClick={() => { setResult(null); setForm({ name: "", email: "", company: "", message: "" }); }}
                 className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
               >
                 Submit another lead

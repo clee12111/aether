@@ -87,6 +87,7 @@ _trace: TraceStore | None = None
 _executor: Executor | None = None
 _provider: str = "mock"
 _model: str = "gpt-4o-mini"
+_daily_cap: int = 200
 
 
 # Route → default delivery action descriptions
@@ -100,10 +101,11 @@ _ROUTE_ACTIONS = {
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    global _crm, _trace, _executor, _provider, _model
+    global _crm, _trace, _executor, _provider, _model, _daily_cap
 
-    _provider = os.environ.get("GTM_PROVIDER", "mock")
+    _provider = os.environ.get("GTM_PROVIDER", "openai")
     _model = os.environ.get("GTM_MODEL", "gpt-4o-mini")
+    _daily_cap = int(os.environ.get("DAILY_QUERY_CAP", "200"))
     crm_backend = os.environ.get("CRM_BACKEND", "sqlite")
     crm_path = os.environ.get("GTM_CRM_DB", "gtm_crm.db")
     trace_path = os.environ.get("GTM_TRACE_DB", "gtm_trace.db")
@@ -158,13 +160,29 @@ app.add_middleware(
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
+@app.get("/config")
+def get_config() -> dict[str, Any]:
+    used = _trace.get_daily_usage() if _trace else 0
+    can_use_openai = _provider == "openai" and bool(os.environ.get("OPENAI_API_KEY", ""))
+    return {
+        "provider": _provider,
+        "model": _model,
+        "crm_backend": os.environ.get("CRM_BACKEND", "sqlite"),
+        "langfuse_enabled": bool(os.environ.get("LANGFUSE_PUBLIC_KEY", "")),
+        "langfuse_host": os.environ.get("LANGFUSE_BASE_URL", "") or os.environ.get("LANGFUSE_HOST", ""),
+        "daily_cap": _daily_cap,
+        "used_today": used,
+        "remaining": max(0, _daily_cap - used) if can_use_openai else 0,
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.post("/triage")
-def triage(req: TriageRequest) -> TriageResult:
+def triage(req: TriageRequest) -> dict[str, Any]:
     # Derive idempotency key if not supplied
     idem_key = req.idempotency_key
     if not idem_key:
@@ -174,7 +192,29 @@ def triage(req: TriageRequest) -> TriageResult:
     # Check for prior run with this key
     prior = _trace.get_by_idempotency_key(idem_key)
     if prior is not None:
-        return TriageResult(**prior["result"])
+        return prior["result"]
+
+    # Daily cap: if provider is openai but over the cap, fall back to mock
+    effective_provider = _provider
+    has_openai_key = bool(os.environ.get("OPENAI_API_KEY", ""))
+    if effective_provider == "openai" and has_openai_key:
+        used = _trace.get_daily_usage()
+        if used >= _daily_cap:
+            effective_provider = "mock"
+    elif effective_provider == "openai" and not has_openai_key:
+        effective_provider = "mock"
+
+    # Build executor with the effective provider (may differ from _provider)
+    if effective_provider != _provider:
+        eff_registry = ToolRegistry([
+            CRMLookupTool(_crm),
+            EnrichLeadTool(provider=effective_provider, model=_model),
+            ScoreLeadTool(provider=effective_provider, model=_model),
+            DraftOutreachTool(),
+        ])
+        eff_executor = Executor(eff_registry, _trace)
+    else:
+        eff_executor = _executor
 
     # Run the agent
     lead = Lead(
@@ -183,11 +223,16 @@ def triage(req: TriageRequest) -> TriageResult:
     )
     result = run_triage(
         lead=lead,
-        executor=_executor,
+        executor=eff_executor,
         trace=_trace,
-        provider=_provider,
+        provider=effective_provider,
         model=_model,
     )
+
+    # Increment daily usage only for real openai runs
+    if effective_provider == "openai":
+        _trace.increment_daily_usage()
+
     crm_data: dict[str, Any] = {
         "email": lead.email,
         "name": lead.name,
@@ -203,10 +248,12 @@ def triage(req: TriageRequest) -> TriageResult:
         crm_data["seniority"] = result.enrichment.get("seniority", "")
     _crm.upsert(lead.email, crm_data)
 
-    # Store idempotency key → result
-    _trace.store_idempotency_key(idem_key, result.run_id, result.model_dump())
+    # Store idempotency key → result (with provider tag)
+    result_dict = result.model_dump()
+    result_dict["provider_used"] = effective_provider
+    _trace.store_idempotency_key(idem_key, result.run_id, result_dict)
 
-    return result
+    return result_dict
 
 
 @app.post("/deliver")
@@ -244,12 +291,17 @@ def get_run(run_id: str) -> dict[str, Any]:
     if not events:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     stats = _trace.get_run_stats(run_id)
-    return {
+    # Include cached triage result for detail panel cards
+    triage_result = _trace.get_result_by_run_id(run_id)
+    resp: dict[str, Any] = {
         "run_id": run_id,
         "event_count": len(events),
         "stats": stats,
         "events": events,
     }
+    if triage_result:
+        resp["triage_result"] = triage_result
+    return resp
 
 
 @app.get("/leads")

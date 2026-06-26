@@ -176,7 +176,7 @@ class ScoreLeadTool(BaseTool):
     def name(self) -> str:
         return "score_lead"
 
-    def run(self, args: dict) -> dict:
+    def run(self, args: dict, run_id: str = "") -> dict:
         email = args.get("email", "")
         name = args.get("name", "")
         company = args.get("company", "")
@@ -213,7 +213,7 @@ class ScoreLeadTool(BaseTool):
             llm_adjustment, llm_reason, llm_tokens_in, llm_tokens_out = infer_score_adjustment(
                 email=email, name=name, company=company, message=message,
                 enrichment=enrichment, rule_points=rule_points, rule_tier=rule_tier,
-                model=self._model,
+                model=self._model, run_id=run_id,
             )
         else:
             adj = args.get("llm_adjustment", 0)

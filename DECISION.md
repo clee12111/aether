@@ -1,5 +1,127 @@
 # DECISION.md — Aether GTM Extension Decision Log
 
+## Phase 6a.4: Micro-fix + README + architecture diagram — 2026-06-26
+
+### What was built
+- Unique preset emails: each preset chip generates a unique email per click
+  (e.g. julia.martinez+m1abc@...) so every preset submission is a fresh run
+  showing real tokens/cost, not an idempotency-cached result.
+- README rewritten as the project's front door: honest framing ("the RAO
+  architecture validated on FinQA at 75.5% on n=200; here applied to lead
+  triage and validated at 90% on its own held-out eval"), Mermaid architecture
+  diagram, four tools table, eval section, two-view app, run/deploy, scope
+  guardrails.
+- Mermaid flowchart: Sources -> n8n -> Aether Agent (built) -> HubSpot/Langfuse
+  (integrated) -> Routing (AE/SDR/Marketing/Drop). Renders on GitHub.
+
+### Acceptance results
+- Mock eval: 5/5, exit 0.
+- `npm run build`: 0 errors.
+- README reads cleanly with honest FinQA citation.
+
+---
+
+## Phase 6a.3: Daily LLM cap + detail-panel fix — 2026-06-26
+
+### What was built
+
+**Daily query cap:**
+- `DAILY_QUERY_CAP` env (default 200). `daily_usage` table in SQLite trace store
+  (date PK, count). Per POST /triage: if under cap and OpenAI configured, runs
+  with openai and increments; otherwise falls back to mock silently. The app never
+  errors or blocks.
+- Response tagged with `provider_used` ("openai" or "mock") so the frontend knows.
+- GET /config extended: returns daily_cap, used_today, remaining.
+- Eval/CI unaffected (they call run_triage directly with mock).
+
+**Detail-panel card fix:**
+- Root cause: frontend parsed triage data from trace event payloads (which store
+  `str(result)` not JSON). Fix: GET /runs/{id} now includes `triage_result` from
+  the idempotency cache, giving the frontend typed access to score, enrichment,
+  and outreach.
+- `get_result_by_run_id()` added to TraceStore (looks up by run_id in
+  idempotency_keys table).
+- Frontend uses `triage_result` directly with proper TypeScript interfaces.
+
+**Metric hiding:**
+- Stats row hides tokens/cost/latency when all zero (mock runs). Shows provider
+  used (green "openai" or gray "mock"). Shows "N real runs left today" from config.
+
+### Acceptance results
+- Mock eval: 5/5, exit 0 (unchanged).
+- Unit tests: 22/22 (5 daily cap + 10 HubSpot + 7 Postgres).
+- `npm run build`: 0 errors.
+- GET /config returns cap, used_today, remaining correctly.
+
+### Browser check for the user
+1. http://localhost:3000 - click a preset chip, submit. See result with tier.
+2. http://localhost:3000/ops - click the lead. Draft card shows subject+body
+   with Copy button. Score card shows points + rule split. Enrichment card
+   shows industry/seniority/confidence. Phased trace below.
+3. For real LLM run: restart API with `GTM_PROVIDER=openai OPENAI_API_KEY=...`,
+   submit a lead. Stats row shows real tokens/cost/latency in green. Draft
+   card shows a model-written email. Score card shows LLM adjustment.
+
+---
+
+## Phase 6a.2: Production-feel revamp — 2026-06-26
+
+### What was built
+
+**Backend:**
+- Default GTM_PROVIDER changed to `openai` (app runtime). Eval/CI stays on mock.
+- run_id threaded through executor -> tools: BaseTool.run() now accepts
+  `run_id`, executor passes it, enrich_lead and score_lead pass it to their
+  LLM calls. Every LLM call (agent decide + tool-internal) now records in
+  both SQLite trace and Langfuse.
+- GET /config endpoint: returns provider, model, crm_backend, langfuse_enabled,
+  langfuse_host so the frontend can build correct deep links and hide irrelevant UI.
+
+**Frontend - Lead form (/):**
+- 5 one-click preset chips: hot enterprise buyer, warm mid-market evaluator,
+  cold IC browser, obvious spam, opt-out. Clicking fills the form. Manual entry
+  still works.
+
+**Frontend - Ops dashboard (/ops):**
+- Draft outreach card: subject + body + "draft" badge + Copy button.
+- Score card: large points display, rule_points vs llm_adjustment split, reason.
+- Enrichment card: industry, size, seniority, business email, confidence.
+- Phased trace: flat events grouped into CRM Lookup / Enrichment / Scoring /
+  Draft Outreach phases, each collapsible with step count and duration.
+- Tier filters: clickable chips in the metric strip filter the lead list.
+- Search box: filters by name or email.
+- Score shown on every lead row consistently.
+- Smart metrics: when provider=mock (0ms/0tok), hides tokens/cost/latency.
+- Working deep links:
+  - Langfuse: real trace URL from config.langfuse_host + trace name. Hidden
+    when Langfuse is not configured.
+  - HubSpot: real contact search URL. Grayed out with tooltip when CRM
+    backend is SQLite.
+
+### Acceptance results
+- `python -m evals.run_eval` (mock): 5/5, exit 0.
+- `python -m pytest tests/`: 17/17.
+- `npm run build`: compiled in 2.0s, 0 errors, / and /ops static.
+- GET /config returns correct runtime info.
+
+### Browser check for the user
+1. Open http://localhost:3000 - click "Hot buyer" preset chip, form fills,
+   submit, see tier badge + route + score.
+2. Open http://localhost:3000/ops - see the lead in the list with score and
+   tier badge. Click it to see the draft card, score card, enrichment card,
+   and phased trace. Click tier chips to filter. Use search box.
+3. For real LLM metrics: restart the API with
+   `GTM_PROVIDER=openai OPENAI_API_KEY=... python -m uvicorn gtm_triage.api:app`
+   and submit a lead. The stats row shows real tokens/cost/latency, and the
+   score card shows the LLM adjustment.
+
+### Design skill used
+design-taste-frontend (taste skill). Same system as Phase 6a.1: Geist Sans +
+Mono, zinc neutrals, indigo accent, rounded-lg shape system, VARIANCE 5 /
+MOTION 3 / DENSITY 5.
+
+---
+
 ## Phase 6b: Deploy-ready (Postgres trace + deploy configs) — 2026-06-26
 
 ### What was built
