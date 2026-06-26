@@ -1,0 +1,37 @@
+services:
+  triage-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - GTM_PROVIDER=${GTM_PROVIDER:-mock}
+      - GTM_MODEL=${GTM_MODEL:-gpt-4o-mini}
+      - GTM_CRM_DB=/data/gtm_crm.db
+      - GTM_TRACE_DB=/data/gtm_trace.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - triage-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').getcode()==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - WEBHOOK_URL=http://localhost:5678
+    volumes:
+      - n8n-data:/home/node/.n8n
+    depends_on:
+      triage-api:
+        condition: service_healthy
+
+volumes:
+  triage-data:
+  n8n-data:

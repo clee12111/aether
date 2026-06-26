@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: gtm-triage-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: free
+    envVars:
+      - key: GTM_PROVIDER
+        value: mock
+      - key: CRM_BACKEND
+        value: hubspot
+      - key: HUBSPOT_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_BASE_URL
+        sync: false
+    healthCheckPath: /health

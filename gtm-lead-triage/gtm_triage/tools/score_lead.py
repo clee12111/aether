@@ -1,0 +1,239 @@
+"""Lead scoring tool with deterministic rules + optional bounded LLM nudge.
+
+When provider="mock" (default): rules-only, llm_adjustment=0.
+When provider="openai": rules first, then a single LLM call proposes a bounded
+adjustment in [-10,+10] with a one-line reason. rule_points and llm_adjustment
+are recorded separately so the model's influence is auditable.
+
+Tier thresholds:
+  hot:           >= 70
+  warm:          45-69
+  cold:          20-44
+  disqualified:  < 20
+
+Route mapping:
+  hot  -> ae_immediate
+  warm -> sdr_nurture
+  cold -> marketing_nurture
+  disqualified -> drop
+
+Phase 1.6 rules (deterministic, auditable):
+  1. Opt-out hard disqualifier — compliance stop, overrides score.
+  2. Spam intent suppression — outbound-spam phrasing zeroes intent bonus.
+  3. Existing-customer boost (+15) — known customer is not a cold stranger.
+  4. Title-inflation discount (-10) — vp/c_level at smb gets manager/director pts.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+
+from gtm_triage.tools.base import BaseTool
+
+logger = logging.getLogger(__name__)
+
+_TIER_THRESHOLDS = [
+    (70, "hot", "ae_immediate"),
+    (45, "warm", "sdr_nurture"),
+    (20, "cold", "marketing_nurture"),
+    (0, "disqualified", "drop"),
+]
+
+_FREE_EMAIL_CAP = 69
+
+# ── Phase 1.6: opt-out keywords (hard disqualifier) ─────────────────────────
+_OPT_OUT_PHRASES = [
+    "unsubscribe", "opt out", "opt-out", "remove me", "stop contacting",
+    "do not contact", "mailing list", "stop emailing", "no further",
+]
+
+# ── Phase 1.6: outbound-spam indicators ─────────────────────────────────────
+# If a message contains 2+ of these, the lead is selling TO us, not buying.
+_SPAM_PHRASES = [
+    "visit our website", "best prices", "act now", "click here",
+    "amazing deals", "guaranteed", "limited time", "special offer",
+    "cheap", "free consultation", "our services", "we offer",
+]
+
+
+def _is_opt_out(message: str) -> bool:
+    """Check if the message contains opt-out language."""
+    msg = message.lower()
+    return any(phrase in msg for phrase in _OPT_OUT_PHRASES)
+
+
+def _spam_phrase_count(message: str) -> int:
+    """Count how many outbound-spam indicators appear in the message."""
+    msg = message.lower()
+    return sum(1 for phrase in _SPAM_PHRASES if phrase in msg)
+
+
+def _score_rules(email: str, message: str, enrichment: dict) -> tuple[int, str, str | None]:
+    """Return (rule_points, reason, hard_override_tier_or_None)."""
+    msg_lower = message.lower()
+    points = 0
+    reasons: list[str] = []
+
+    # ── Phase 1.6 rule 1: opt-out hard disqualifier ──────────────────────
+    if _is_opt_out(message):
+        reasons.append("opt_out_hard_disqualify")
+        return 0, "; ".join(reasons), "disqualified"
+
+    # ── Phase 1.6 rule 2: spam intent suppression ────────────────────────
+    spam_count = _spam_phrase_count(message)
+    is_spam = spam_count >= 2
+    if is_spam:
+        reasons.append(f"spam_detected({spam_count}_phrases)")
+
+    # ── Standard rules ───────────────────────────────────────────────────
+
+    # 1. Business email
+    if enrichment.get("is_business_email", False):
+        points += 15
+        reasons.append("business_email(+15)")
+
+    # 2. Company size
+    size = enrichment.get("company_size", "unknown")
+    size_points = {"enterprise": 25, "mid_market": 20, "smb": 10, "unknown": 0}
+    pts = size_points.get(size, 0)
+    if pts:
+        points += pts
+        reasons.append(f"company_size_{size}(+{pts})")
+
+    # 3. Seniority (with Phase 1.6 rule 4: title-inflation discount)
+    seniority = enrichment.get("seniority", "unknown")
+    seniority_points = {"c_level": 25, "vp": 20, "director": 15, "manager": 10, "ic": 5, "unknown": 0}
+    sen_pts = seniority_points.get(seniority, 0)
+
+    # Phase 1.6 rule 4: discount vp/c_level at smb by 10
+    title_inflated = False
+    if seniority in ("vp", "c_level") and size == "smb":
+        sen_pts = max(0, sen_pts - 10)
+        title_inflated = True
+        reasons.append(f"seniority_{seniority}_inflated(+{sen_pts}, -10 smb discount)")
+    elif sen_pts:
+        reasons.append(f"seniority_{seniority}(+{sen_pts})")
+    if sen_pts:
+        points += sen_pts
+
+    # 4. Message-intent signals (suppressed if spam detected)
+    if is_spam:
+        reasons.append("intent_suppressed(spam)")
+    else:
+        if any(kw in msg_lower for kw in [
+            "demo", "trial", "pricing", "buy", "purchase", "urgent",
+            "upgrade", "renew",
+        ]):
+            points += 15
+            reasons.append("high_intent_message(+15)")
+        elif any(kw in msg_lower for kw in ["interested", "learn more", "evaluate", "considering"]):
+            points += 8
+            reasons.append("medium_intent_message(+8)")
+        elif any(kw in msg_lower for kw in ["info", "question", "curious"]):
+            points += 3
+            reasons.append("low_intent_message(+3)")
+
+    # 5. Industry bonus
+    industry = enrichment.get("industry", "unknown")
+    if industry in ("financial_services", "technology"):
+        points += 5
+        reasons.append(f"target_industry_{industry}(+5)")
+
+    # ── Phase 1.6 rule 3: existing-customer boost ────────────────────────
+    if enrichment.get("is_customer"):
+        points += 15
+        reasons.append("existing_customer(+15)")
+
+    # 6. Free-email cap
+    if not enrichment.get("is_business_email", False):
+        if points > _FREE_EMAIL_CAP:
+            points = _FREE_EMAIL_CAP
+            reasons.append(f"free_email_cap({_FREE_EMAIL_CAP})")
+
+    # Spam + free email + no company → hard disqualify
+    if is_spam and not enrichment.get("is_business_email", False):
+        reasons.append("spam_free_email_disqualify")
+        return 0, "; ".join(reasons), "disqualified"
+
+    points = max(0, min(100, points))
+    return points, "; ".join(reasons), None
+
+
+def _classify(points: int) -> tuple[str, str]:
+    for threshold, tier, route in _TIER_THRESHOLDS:
+        if points >= threshold:
+            return tier, route
+    return "disqualified", "drop"
+
+
+class ScoreLeadTool(BaseTool):
+    def __init__(self, provider: str = "mock", model: str = "gpt-4o-mini") -> None:
+        self._provider = provider
+        self._model = model
+
+    @property
+    def name(self) -> str:
+        return "score_lead"
+
+    def run(self, args: dict) -> dict:
+        email = args.get("email", "")
+        name = args.get("name", "")
+        company = args.get("company", "")
+        message = args.get("message", "")
+        enrichment = args.get("enrichment", {})
+
+        rule_points, reason, hard_override = _score_rules(email, message, enrichment)
+
+        # If a hard override fired, skip LLM adjustment entirely
+        if hard_override:
+            return {
+                "email": email,
+                "points": rule_points,
+                "tier": hard_override,
+                "route": "drop" if hard_override == "disqualified" else _classify(rule_points)[1],
+                "reason": reason,
+                "rule_points": rule_points,
+                "llm_adjustment": 0,
+                "llm_reason": "",
+                "llm_tokens_in": 0,
+                "llm_tokens_out": 0,
+            }
+
+        rule_tier, _ = _classify(rule_points)
+
+        # LLM adjustment (openai provider only)
+        llm_adjustment = 0
+        llm_reason = ""
+        llm_tokens_in = 0
+        llm_tokens_out = 0
+
+        if self._provider == "openai":
+            from gtm_triage.agents.llm_client import infer_score_adjustment
+            llm_adjustment, llm_reason, llm_tokens_in, llm_tokens_out = infer_score_adjustment(
+                email=email, name=name, company=company, message=message,
+                enrichment=enrichment, rule_points=rule_points, rule_tier=rule_tier,
+                model=self._model,
+            )
+        else:
+            adj = args.get("llm_adjustment", 0)
+            try:
+                llm_adjustment = max(-10, min(10, int(adj)))
+            except (ValueError, TypeError):
+                llm_adjustment = 0
+
+        total = max(0, min(100, rule_points + llm_adjustment))
+        tier, route = _classify(total)
+
+        return {
+            "email": email,
+            "points": total,
+            "tier": tier,
+            "route": route,
+            "reason": reason,
+            "rule_points": rule_points,
+            "llm_adjustment": llm_adjustment,
+            "llm_reason": llm_reason,
+            "llm_tokens_in": llm_tokens_in,
+            "llm_tokens_out": llm_tokens_out,
+        }

@@ -1,0 +1,205 @@
+{
+  "name": "GTM Lead Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "inbound",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-inbound",
+      "name": "Webhook — Inbound Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://triage-api:8000/triage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify(Object.assign({}, $json.body, { idempotency_key: $execution.id })) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-triage",
+      "name": "HTTP — Triage Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "outputIndex": 0,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.final_tier }}",
+                    "rightValue": "hot",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputLabel": "Hot"
+            },
+            {
+              "outputIndex": 1,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.final_tier }}",
+                    "rightValue": "warm",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputLabel": "Warm"
+            },
+            {
+              "outputIndex": 2,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.final_tier }}",
+                    "rightValue": "cold",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputLabel": "Cold"
+            },
+            {
+              "outputIndex": 3,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.final_tier }}",
+                    "rightValue": "disqualified",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputLabel": "Disqualified"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-tier",
+      "name": "Switch — Route by Tier",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://triage-api:8000/deliver",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.lead_email, run_id: $json.run_id, tier: $json.final_tier, route: $json.final_route, action: 'notified AE for immediate follow-up' }) }}",
+        "options": {}
+      },
+      "id": "deliver-hot",
+      "name": "Deliver — Hot (AE)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://triage-api:8000/deliver",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.lead_email, run_id: $json.run_id, tier: $json.final_tier, route: $json.final_route, action: 'added to SDR nurture sequence' }) }}",
+        "options": {}
+      },
+      "id": "deliver-warm",
+      "name": "Deliver — Warm (SDR)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://triage-api:8000/deliver",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.lead_email, run_id: $json.run_id, tier: $json.final_tier, route: $json.final_route, action: 'added to marketing nurture campaign' }) }}",
+        "options": {}
+      },
+      "id": "deliver-cold",
+      "name": "Deliver — Cold (Marketing)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://triage-api:8000/deliver",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.lead_email, run_id: $json.run_id, tier: $json.final_tier, route: $json.final_route, action: 'dropped — no action taken' }) }}",
+        "options": {}
+      },
+      "id": "deliver-disqualified",
+      "name": "Deliver — Disqualified (Drop)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 580]
+    }
+  ],
+  "connections": {
+    "Webhook — Inbound Lead": {
+      "main": [
+        [{ "node": "HTTP — Triage Lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP — Triage Lead": {
+      "main": [
+        [{ "node": "Switch — Route by Tier", "type": "main", "index": 0 }]
+      ]
+    },
+    "Switch — Route by Tier": {
+      "main": [
+        [{ "node": "Deliver — Hot (AE)", "type": "main", "index": 0 }],
+        [{ "node": "Deliver — Warm (SDR)", "type": "main", "index": 0 }],
+        [{ "node": "Deliver — Cold (Marketing)", "type": "main", "index": 0 }],
+        [{ "node": "Deliver — Disqualified (Drop)", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "aether-gtm-triage"
+  }
+}
