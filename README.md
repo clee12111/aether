@@ -4,6 +4,8 @@ Give Aether a financial document and a plain-language goal. It reasons one step 
 
 **Every number it shows traces back to a source cell. When the evidence isn't there, it declines rather than fabricates.**
 
+> **Live demo — GTM lead-triage extension:** [aether-c7bg.vercel.app](https://aether-c7bg.vercel.app/) — the same reasoning loop applied to inbound lead qualification, deployed and traced. [Details below.](#gtm-extension--inbound-lead-triage)
+
 ---
 
 ## What it does
@@ -54,6 +56,18 @@ Asked for profit by segment over a 700-row dataset, the engine aggregated with S
 | Grounding guard | adversarial prompts | Refused to fabricate in both stress tests |
 
 Numbers are reported at the floor, not the peak. Retrieval recall is flat (±0.01 R@5) across chunk sizes 512–1500; 512/100 is shipped. Full chronological record — every measurement, bug, and correction — in the [validation log](docs/aether-validation-log.md).
+
+---
+
+## GTM extension — inbound lead triage
+
+The same reason-act-observe loop, pointed at a different job: triaging inbound sales leads instead of answering financial questions. A lead arrives, the agent looks it up in the CRM, enriches it, scores and routes it, and drafts outreach — every step traced, and it never sends.
+
+**Live: [aether-c7bg.vercel.app](https://aether-c7bg.vercel.app/)** — `/` is the lead-capture form, `/ops` is the live triage dashboard.
+
+![GTM lead-triage pipeline](gtm-lead-triage/docs/pipeline.svg)
+
+**Build the brain, integrate the body.** The decision brain — the RAO agent, its eval, and its trace — is built here. The orchestration (n8n), CRM (HubSpot), and observability (Langfuse) are integrated, not rebuilt. The loop is the same architecture validated on FinQA in the core engine; here it's validated on its own task — a 22-lead human-labeled qualification eval, 90% tier accuracy on held-out leads. Full writeup in [gtm-lead-triage/README.md](gtm-lead-triage/README.md).
 
 ---
 
