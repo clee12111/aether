@@ -75,7 +75,19 @@ def _score_rules(email: str, message: str, enrichment: dict) -> tuple[int, str, 
     points = 0
     reasons: list[str] = []
 
-    # ── Phase 1.6 rule 1: opt-out hard disqualifier ──────────────────────
+    # ── Extraction-based intent hard disqualifiers ───────────────────────
+    # When extraction ran, its intent classification is more reliable than
+    # the phrase list because it handles edge cases (DSAR, legal requests,
+    # variant opt-out phrasing).
+    extracted_intent = enrichment.get("extracted_intent", "")
+    if extracted_intent == "opt_out":
+        reasons.append("extracted_intent_opt_out_disqualify")
+        return 0, "; ".join(reasons), "disqualified"
+    if extracted_intent == "legal_or_compliance":
+        reasons.append("extracted_intent_legal_disqualify")
+        return 0, "; ".join(reasons), "disqualified"
+
+    # ── Phase 1.6 rule 1: opt-out hard disqualifier (phrase-list fallback)
     if _is_opt_out(message):
         reasons.append("opt_out_hard_disqualify")
         return 0, "; ".join(reasons), "disqualified"
@@ -121,18 +133,35 @@ def _score_rules(email: str, message: str, enrichment: dict) -> tuple[int, str, 
     if is_spam:
         reasons.append("intent_suppressed(spam)")
     else:
-        if any(kw in msg_lower for kw in [
-            "demo", "trial", "pricing", "buy", "purchase", "urgent",
-            "upgrade", "renew",
-        ]):
+        # Try extraction-based intent first (covers non-English, signature blocks, etc.)
+        intent_scored = False
+        if extracted_intent == "high":
             points += 15
-            reasons.append("high_intent_message(+15)")
-        elif any(kw in msg_lower for kw in ["interested", "learn more", "evaluate", "considering"]):
+            reasons.append("extracted_high_intent(+15)")
+            intent_scored = True
+        elif extracted_intent == "medium":
             points += 8
-            reasons.append("medium_intent_message(+8)")
-        elif any(kw in msg_lower for kw in ["info", "question", "curious"]):
+            reasons.append("extracted_medium_intent(+8)")
+            intent_scored = True
+        elif extracted_intent == "low":
             points += 3
-            reasons.append("low_intent_message(+3)")
+            reasons.append("extracted_low_intent(+3)")
+            intent_scored = True
+
+        # Fallback to keyword matching if extraction didn't fire
+        if not intent_scored:
+            if any(kw in msg_lower for kw in [
+                "demo", "trial", "pricing", "buy", "purchase", "urgent",
+                "upgrade", "renew",
+            ]):
+                points += 15
+                reasons.append("high_intent_message(+15)")
+            elif any(kw in msg_lower for kw in ["interested", "learn more", "evaluate", "considering"]):
+                points += 8
+                reasons.append("medium_intent_message(+8)")
+            elif any(kw in msg_lower for kw in ["info", "question", "curious"]):
+                points += 3
+                reasons.append("low_intent_message(+3)")
 
     # 5. Industry bonus
     industry = enrichment.get("industry", "unknown")

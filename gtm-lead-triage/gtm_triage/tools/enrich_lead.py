@@ -122,8 +122,32 @@ class EnrichLeadTool(BaseTool):
 
         # ── New path: delegate to EnrichmentProvider ─────────────────────
         if self._enrichment_provider is not None:
+            from gtm_triage.enrichment.extraction import extract_lead_signals
             result = self._enrichment_provider.enrich(email, name, company, message)
+
+            # Run extraction on the lead's own words
+            extraction = extract_lead_signals(name=name, message=message, email=email)
+
+            # Merge: extraction seniority wins over enrichment if higher confidence
+            if extraction.seniority and extraction.seniority_confidence > result.seniority.confidence:
+                from gtm_triage.enrichment.base import FieldValue
+                result.seniority = FieldValue(
+                    value=extraction.seniority,
+                    source="regex",
+                    confidence=extraction.seniority_confidence,
+                )
+            if extraction.role and extraction.role_confidence > result.role.confidence:
+                from gtm_triage.enrichment.base import FieldValue
+                result.role = FieldValue(
+                    value=extraction.role,
+                    source="regex",
+                    confidence=extraction.role_confidence,
+                )
+
             flat = result.to_flat_dict()
+            # Pass intent through for scoring
+            flat["extracted_intent"] = extraction.intent
+            flat["extracted_intent_confidence"] = extraction.intent_confidence
             # Add token placeholders for compatibility
             flat["llm_tokens_in"] = 0
             flat["llm_tokens_out"] = 0
