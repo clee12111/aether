@@ -209,7 +209,7 @@ _cors_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "X-API-Key", "Content-Type"],
 )
 
@@ -379,3 +379,18 @@ def list_leads(limit: int = 50) -> list[dict[str, Any]]:
 @app.get("/runs")
 def list_runs(limit: int = 50) -> list[dict[str, Any]]:
     return _trace.list_runs(limit)
+
+
+@app.delete("/contacts/{email}")
+def delete_contact(email: str) -> dict[str, Any]:
+    """Right-to-erasure: delete contact record, activities, and trace data."""
+    crm_deleted = _crm.delete_contact(email)
+    trace_runs_deleted = _trace.delete_by_email(email) if hasattr(_trace, "delete_by_email") else 0
+    if not crm_deleted and trace_runs_deleted == 0:
+        raise HTTPException(status_code=404, detail=f"No data found for {email}")
+    return {
+        "email": email,
+        "status": "deleted",
+        "crm_record_deleted": crm_deleted,
+        "trace_runs_deleted": trace_runs_deleted,
+    }

@@ -215,5 +215,32 @@ class TraceStore:
             return None
         return json.loads(row["result"])
 
+    def delete_by_email(self, email: str) -> int:
+        """Delete all trace events and idempotency records for runs involving
+        this email (right-to-erasure). Returns the count of deleted events."""
+        # Find run_ids that reference this email in run_start payload
+        rows = self._conn.execute(
+            "SELECT DISTINCT run_id FROM trace_events WHERE event_type = 'run_start' "
+            "AND payload LIKE ?",
+            (f'%"email": "{email}"%',),
+        ).fetchall()
+        run_ids = [r["run_id"] for r in rows]
+        if not run_ids:
+            return 0
+
+        placeholders = ",".join("?" * len(run_ids))
+        # Delete trace events
+        self._conn.execute(
+            f"DELETE FROM trace_events WHERE run_id IN ({placeholders})",
+            run_ids,
+        )
+        # Delete idempotency records
+        self._conn.execute(
+            f"DELETE FROM idempotency_keys WHERE run_id IN ({placeholders})",
+            run_ids,
+        )
+        self._conn.commit()
+        return len(run_ids)
+
     def close(self) -> None:
         self._conn.close()

@@ -9,8 +9,8 @@ import pytest
 
 from gtm_triage.security import (
     detect_injection,
+    resolve_and_validate,
     ssrf_safe_domain,
-    validate_domain,
     validate_url,
 )
 
@@ -20,14 +20,14 @@ from gtm_triage.security import (
 
 class TestSSRFGuard:
     def test_blocks_loopback(self):
-        err = validate_domain("localhost")
+        err, _ = resolve_and_validate("localhost")
         # localhost resolves to 127.0.0.1 — should be blocked
         assert err is not None and "Blocked IP" in err
 
     def test_blocks_private_ip_literal(self):
         err = validate_url("http://192.168.1.1/admin")
         assert err is None  # URL is syntactically valid
-        err = validate_domain("192.168.1.1")
+        err, _ = resolve_and_validate("192.168.1.1")
         if err:  # may not resolve — that's fine
             assert "Blocked IP" in err
 
@@ -221,8 +221,8 @@ class TestCORS:
         assert "allow_origins=['*']" not in source
 
     def test_cors_methods_restricted(self):
-        """CORS methods should not be '*' — only GET and POST needed."""
+        """CORS methods should not be '*' — only GET, POST, DELETE needed."""
         import inspect
         from gtm_triage import api
         source = inspect.getsource(api)
-        assert 'allow_methods=["GET", "POST"]' in source
+        assert 'allow_methods=["GET", "POST", "DELETE"]' in source

@@ -114,5 +114,17 @@ class SQLiteCRM(CRMStore):
             results.append(record)
         return results
 
+    def delete_contact(self, email: str) -> bool:
+        """Delete contact record + all activities for this email (right-to-erasure)."""
+        row = self._conn.execute(
+            "SELECT email FROM crm_records WHERE email = ?", (email,)
+        ).fetchone()
+        if row is None:
+            return False
+        self._conn.execute("DELETE FROM crm_activities WHERE email = ?", (email,))
+        self._conn.execute("DELETE FROM crm_records WHERE email = ?", (email,))
+        self._conn.commit()
+        return True
+
     def close(self) -> None:
         self._conn.close()

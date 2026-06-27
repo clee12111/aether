@@ -29,6 +29,13 @@ class CRMStore(ABC):
         """Return all activities for a contact, newest first."""
         ...
 
+    def delete_contact(self, email: str) -> bool:
+        """Delete a contact and all its activities (right-to-erasure).
+
+        Returns True if a contact was found and deleted, False if not found.
+        """
+        return False  # default no-op; override in implementations
+
     def close(self) -> None:
         """Release resources. Override if the backend holds connections."""
         pass

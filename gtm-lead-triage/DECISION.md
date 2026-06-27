@@ -168,3 +168,20 @@ Lead messages are ATTACKER-CONTROLLED text that flows into: (1) LLM extraction +
   root and project level.
 - **Dep scan**: pip-audit run. GTM-specific deps (httpx, psycopg, openai, pydantic, fastapi) clean.
   Parent-project deps (aiohttp, chromadb, langchain) have known CVEs — tracked but not GTM-blocking.
+
+## 2026-06-27 — Phase J: Privacy/compliance
+
+### SSRF hardening (closing Phase I gaps)
+- Added CGNAT (100.64.0.0/10), IPv4-mapped IPv6 (::ffff:0:0/96) to blocked networks.
+- Cloud metadata endpoint 169.254.169.254 explicitly tested as blocked.
+- `resolve_and_validate()` returns safe IPs for IP pinning (prevents DNS-rebinding TOCTOU).
+- Full IPv6 coverage: ::1, fc00::/7 (ULA), fe80::/10 (link-local), IPv4-mapped.
+
+### PII minimization + right to erasure
+- Only mapped enrichment fields persisted, not raw PDL responses.
+- `DELETE /contacts/{email}`: removes CRM record + activities + trace events + idempotency records.
+- sean@peopledatalabs.com cassette scrubbed (only real person entry).
+
+### COMPLIANCE.md
+- Data collected, lawful basis (legitimate interest Art. 6(1)(f)), retention, deletion path,
+  sub-processors (OpenAI, PDL, HubSpot, Neon), PII minimization.

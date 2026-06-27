@@ -1,6 +1,8 @@
 """Security primitives: SSRF guard, prompt-injection detection.
 
-SSRF: block private/internal IPs, non-http(s) schemes, cap redirects.
+SSRF: block private/internal IPs (incl. cloud metadata 169.254.169.254),
+non-http(s) schemes, IPv4-mapped IPv6, pin validated IP to prevent DNS
+rebinding TOCTOU.
 Injection: detect known patterns in lead messages, flag but don't crash.
 """
 
@@ -17,17 +19,21 @@ logger = logging.getLogger(__name__)
 
 # ── SSRF guard ───────────────────────────────────────────────────────────────
 
-# IP ranges that must never be fetched (RFC1918, loopback, link-local, etc.)
+# IP ranges that must never be fetched
 _BLOCKED_NETWORKS = [
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.0.0/16"),  # link-local
-    ipaddress.ip_network("0.0.0.0/8"),
-    ipaddress.ip_network("::1/128"),          # IPv6 loopback
-    ipaddress.ip_network("fc00::/7"),         # IPv6 private
-    ipaddress.ip_network("fe80::/10"),        # IPv6 link-local
+    # IPv4
+    ipaddress.ip_network("0.0.0.0/8"),         # "this" network
+    ipaddress.ip_network("10.0.0.0/8"),        # RFC1918 private
+    ipaddress.ip_network("100.64.0.0/10"),     # CGNAT (shared address space)
+    ipaddress.ip_network("127.0.0.0/8"),       # loopback
+    ipaddress.ip_network("169.254.0.0/16"),    # link-local (incl. cloud metadata 169.254.169.254)
+    ipaddress.ip_network("172.16.0.0/12"),     # RFC1918 private
+    ipaddress.ip_network("192.168.0.0/16"),    # RFC1918 private
+    # IPv6
+    ipaddress.ip_network("::1/128"),           # loopback
+    ipaddress.ip_network("fc00::/7"),          # ULA (unique local)
+    ipaddress.ip_network("fe80::/10"),         # link-local
+    ipaddress.ip_network("::ffff:0:0/96"),     # IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1)
 ]
 
 _ALLOWED_SCHEMES = {"http", "https"}
@@ -50,32 +56,49 @@ def validate_url(url: str) -> str | None:
     return None
 
 
-def validate_domain(domain: str) -> str | None:
-    """Resolve a domain and check the IP isn't internal. Returns error or None."""
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Check if an IP falls in any blocked network."""
+    for net in _BLOCKED_NETWORKS:
+        if ip in net:
+            return True
+    return False
+
+
+def resolve_and_validate(domain: str) -> tuple[str | None, list[str]]:
+    """Resolve a domain, validate all IPs, return (error, safe_ips).
+
+    Returns the resolved IPs so the caller can PIN the connection to them
+    (prevents DNS-rebinding TOCTOU: resolve → validate → connect to the
+    validated IP, never re-resolve).
+    """
+    safe_ips: list[str] = []
     try:
-        # Resolve before connecting — prevents DNS rebinding
         infos = socket.getaddrinfo(domain, 443, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for family, _, _, _, sockaddr in infos:
             ip_str = sockaddr[0]
             ip = ipaddress.ip_address(ip_str)
-            for net in _BLOCKED_NETWORKS:
-                if ip in net:
-                    return f"Blocked IP: {ip_str} resolves to internal network"
+            if _is_blocked_ip(ip):
+                return f"Blocked IP: {ip_str} resolves to internal network", []
+            safe_ips.append(ip_str)
     except (socket.gaierror, socket.timeout, OSError):
-        # DNS resolution failed — domain doesn't exist, which is fine (not SSRF)
-        return None
+        # DNS resolution failed — domain doesn't exist
+        return None, []
 
-    return None
+    return None, safe_ips
 
 
 def ssrf_safe_domain(domain: str) -> bool:
-    """Return True if the domain is safe to fetch (not internal)."""
+    """Return True if the domain is safe to fetch (not internal).
+
+    Resolves DNS, validates all IPs against blocked networks, and returns
+    True only if every resolved IP is public.
+    """
     url_err = validate_url(f"https://{domain}")
     if url_err:
         logger.warning("SSRF blocked: %s (%s)", domain, url_err)
         return False
 
-    ip_err = validate_domain(domain)
+    ip_err, _ = resolve_and_validate(domain)
     if ip_err:
         logger.warning("SSRF blocked: %s (%s)", domain, ip_err)
         return False
