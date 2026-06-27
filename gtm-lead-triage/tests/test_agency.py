@@ -129,6 +129,16 @@ class TestTracePath:
         }
         assert _determine_trace_path(signals) == "LOW_CONFIDENCE_GATE"
 
+    def test_dig_deeper(self):
+        signals = {
+            "email_verdict": "deliverable",
+            "extracted_intent": "medium",
+            "extracted_intent_confidence": 0.65,
+            "extracted_seniority": "",
+            "extracted_seniority_confidence": 0.0,
+        }
+        assert _determine_trace_path(signals, enrichment_low_conf=True) == "DIG_DEEPER"
+
     def test_clean_path(self):
         signals = {
             "email_verdict": "deliverable",
@@ -266,6 +276,61 @@ class TestEndToEnd:
         assert "crm_lookup" in tool_sequence
         assert "score_lead" in tool_sequence
 
+    def test_crm_hit_routes_on_history(self):
+        """CRM hit with existing customer + open opp → routes on history.
+
+        Core GTM path: known customer asking to upgrade should route to AE
+        immediately, using the CRM profile (not re-enriching from scratch).
+        """
+        crm = SQLiteCRM(":memory:")
+        crm.upsert("renewal@bigclient.com", {
+            "email": "renewal@bigclient.com",
+            "company": "Big Client Corp",
+            "industry": "financial_services",
+            "company_size": "enterprise",
+            "seniority": "director",
+            "is_business_email": True,
+            "is_customer": True,
+            "plan": "enterprise",
+            "found": True,
+        })
+        executor, trace = _make_executor(crm)
+        lead = Lead(
+            email="renewal@bigclient.com",
+            name="Dana Rivera, Director of IT",
+            company="Big Client Corp",
+            message="We need to renew our enterprise contract and add 50 seats.",
+        )
+        result = run_triage(lead, executor, trace, provider="mock")
+
+        assert result.trace_path == "CRM_HIT_SKIP_ENRICH"
+        tool_sequence = [s.action.tool for s in result.steps if s.action.tool]
+        assert "enrich_lead" not in tool_sequence
+        # Should score hot — existing customer + upgrade intent + director
+        assert result.final_tier in ("hot", "warm"), f"Expected hot/warm, got {result.final_tier}"
+        # CRM data was used for scoring (enrichment comes from CRM, not enrich_lead)
+        assert result.enrichment is not None
+        assert result.enrichment.get("is_customer") is True
+
+    def test_dig_deeper_on_low_confidence_enrichment(self):
+        """Low-confidence enrichment (unknown industry+size) → DIG_DEEPER trace."""
+        executor, trace = _make_executor()
+        # A lead at an unknown domain where enrichment returns mostly unknown
+        lead = Lead(
+            email="contact@obscurefirm.xyz",
+            name="Sam Nolan",
+            company="Obscure Firm",
+            message="We'd like to explore your platform for our team.",
+        )
+        result = run_triage(lead, executor, trace, provider="mock")
+
+        # The regex enrichment won't know industry or size for "obscurefirm.xyz"
+        # so enrichment confidence will be low → DIG_DEEPER
+        assert result.trace_path == "DIG_DEEPER", f"Expected DIG_DEEPER, got {result.trace_path}"
+        tool_sequence = [s.action.tool for s in result.steps if s.action.tool]
+        assert "enrich_lead" in tool_sequence
+        assert "score_lead" in tool_sequence
+
     def test_clean_full_path(self):
         """Normal lead → full path with all tools."""
         executor, trace = _make_executor()
@@ -296,19 +361,35 @@ class TestEndToEnd:
 
 
 class TestTraceShapeDiversity:
-    def test_at_least_four_distinct_paths(self):
-        """Run a mix of leads and assert >=4 distinct trace paths."""
-        executor, trace = _make_executor()
+    def test_at_least_five_distinct_paths(self):
+        """Run a mix of leads and assert >=5 distinct trace paths."""
+        crm = SQLiteCRM(":memory:")
+        crm.upsert("known@bigclient.com", {
+            "email": "known@bigclient.com",
+            "company": "Big Client",
+            "industry": "financial_services",
+            "company_size": "enterprise",
+            "seniority": "director",
+            "is_business_email": True,
+            "is_customer": True,
+            "found": True,
+        })
+        executor, trace = _make_executor(crm)
+
         leads = [
             Lead(email="x@yopmail.com"),                                    # SHORT_CIRCUIT_INVALID
             Lead(email="hr@nvidia.com", message="Unsubscribe me."),         # SHORT_CIRCUIT_INTENT
-            Lead(email="compliance@jpmorgan.com",                           # SHORT_CIRCUIT_INTENT
-                 message="GDPR Article 15 data subject access request."),
+            Lead(email="known@bigclient.com",                               # CRM_HIT_SKIP_ENRICH
+                 name="Known Person", company="Big Client",
+                 message="Renew our plan."),
+            Lead(email="someone@obscurefirm.xyz",                           # DIG_DEEPER
+                 message="Exploring your platform."),
+            Lead(email="e.brook@lemonade.com",                              # LOW_CONFIDENCE_GATE
+                 message="Product on shortlist our CTO shared."),
             Lead(email="j.martinez@acmefintech.com",                        # CLEAN_FULL_PATH
                  name="Julia Martinez, VP of Sales",
                  company="Acme Fintech International",
                  message="Demo please."),
-            Lead(email="test@stripe.com"),                                  # CLEAN_FULL_PATH (no seniority)
         ]
 
         paths = set()
@@ -316,4 +397,4 @@ class TestTraceShapeDiversity:
             result = run_triage(lead, executor, trace, provider="mock")
             paths.add(result.trace_path)
 
-        assert len(paths) >= 3, f"Only {len(paths)} distinct paths: {paths}"
+        assert len(paths) >= 5, f"Only {len(paths)} distinct paths: {paths}"

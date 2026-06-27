@@ -82,10 +82,13 @@ class TestSeniorityExtraction:
         assert r.seniority == "c_level"
         assert r.seniority_confidence < 0.50  # below confidence gate
 
-    def test_third_person_my_manager(self):
+    def test_third_person_my_manager_not_penalized(self):
+        """'My manager' is NOT penalized — manager carries only 10 points,
+        too few to cause a false-hot. Only c_level/vp/director get the
+        third-person confidence reduction."""
         r = extract_lead_signals(message="My manager asked me to gather options.")
         assert r.seniority == "manager"
-        assert r.seniority_confidence < 0.50
+        assert r.seniority_confidence >= 0.50  # not gated
 
     def test_first_person_i_am_the_cto(self):
         """'I'm the CTO' → c_level with HIGH confidence (first-person)."""

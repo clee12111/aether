@@ -9,6 +9,7 @@ Trace paths:
   SHORT_CIRCUIT_INTENT   — opt_out/legal intent → disqualify, <=2 steps
   CRM_HIT_SKIP_ENRICH   — CRM has complete profile → skip enrichment
   LOW_CONFIDENCE_GATE    — low-confidence seniority downgraded before scoring
+  DIG_DEEPER             — low-confidence enrichment → extra step before scoring
   CLEAN_FULL_PATH        — high-confidence signals → full pipeline
 """
 
@@ -218,7 +219,12 @@ def _compute_pre_signals(lead: Lead) -> dict:
     return signals
 
 
-def _determine_trace_path(pre_signals: dict, crm_found: bool = False, crm_complete: bool = False) -> str:
+def _determine_trace_path(
+    pre_signals: dict,
+    crm_found: bool = False,
+    crm_complete: bool = False,
+    enrichment_low_conf: bool = False,
+) -> str:
     """Determine which trace path this lead should follow based on signals."""
     # Priority order: short-circuits first, then CRM, then confidence, then clean
     verdict = pre_signals.get("email_verdict", "")
@@ -237,6 +243,9 @@ def _determine_trace_path(pre_signals: dict, crm_found: bool = False, crm_comple
     seniority = pre_signals.get("extracted_seniority", "")
     if seniority and sen_conf < _CONFIDENCE_GATE:
         return "LOW_CONFIDENCE_GATE"
+
+    if enrichment_low_conf:
+        return "DIG_DEEPER"
 
     return "CLEAN_FULL_PATH"
 
@@ -398,11 +407,21 @@ def run_triage(
                 if has_industry and has_size and has_seniority:
                     trace_path = "CRM_HIT_SKIP_ENRICH"
 
-            # Enrichment → apply confidence gate
+            # Enrichment → apply confidence gate + check for DIG_DEEPER
             if action.tool == "enrich_lead" and output:
                 output = _apply_confidence_gate(output, pre_signals)
                 if output.get("seniority_gated"):
                     trace_path = "LOW_CONFIDENCE_GATE"
+
+                # DIG_DEEPER: enrichment returned but key fields are missing.
+                # When BOTH industry and company_size are unknown, the scoring
+                # rules have almost nothing to work with — flag for deeper
+                # investigation (website second-pass, manual review, etc.).
+                industry_val = output.get("industry", "unknown")
+                size_val = output.get("company_size", "unknown")
+                if industry_val == "unknown" and size_val == "unknown":
+                    if trace_path == "CLEAN_FULL_PATH":
+                        trace_path = "DIG_DEEPER"
 
             obs = Observation(output=output, error=error)
 
