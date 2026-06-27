@@ -1,10 +1,15 @@
 """RAO (Reason-Act-Observe) loop agent for GTM lead triage.
 
-Phase 1.5 changes:
-- System prompt updated: skip enrichment if CRM has complete profile, skip draft
-  for cold/disqualified.
-- Token counts and duration recorded in trace events.
-- Provider passed to tools so they can use LLM fallback (openai only).
+Phase D: signal-driven branching. Pre-loop checks (email validity, extraction)
+determine the trace path. The loop branches on observations — different leads
+produce different trace shapes.
+
+Trace paths:
+  SHORT_CIRCUIT_INVALID  — invalid/disposable email → disqualify, <=2 steps
+  SHORT_CIRCUIT_INTENT   — opt_out/legal intent → disqualify, <=2 steps
+  CRM_HIT_SKIP_ENRICH   — CRM has complete profile → skip enrichment
+  LOW_CONFIDENCE_GATE    — low-confidence seniority downgraded before scoring
+  CLEAN_FULL_PATH        — high-confidence signals → full pipeline
 """
 
 from __future__ import annotations
@@ -24,19 +29,20 @@ from gtm_triage.trace.store import TraceStore
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """You are a GTM lead-triage agent. Given a new lead, you triage it step by step. You reason about each step, pick ONE tool, observe the result, then decide next.
+_SYSTEM_PROMPT = """You are a GTM lead-triage agent. Given a new lead and pre-computed signals, you triage it step by step. You reason about each step, pick ONE tool, observe the result, then decide next.
 
-WORKFLOW:
-1. crm_lookup — always first. Check for existing CRM record.
-2. enrich_lead — SKIP if crm_lookup returned a complete profile (found=true with industry, company_size, seniority all present). Otherwise enrich the lead.
-3. score_lead — score the lead using enrichment data (from enrich_lead or CRM).
-4. draft_outreach — ONLY for hot and warm tiers. If tier is cold or disqualified, skip this and finalize immediately.
-5. Finalize — set is_final=true when all applicable steps are complete.
+DECISION CRITERIA (use these to choose your path — do NOT follow a fixed sequence):
+
+- If pre-signals show INVALID or DISPOSABLE email: finalize as disqualified immediately.
+- If pre-signals show OPT_OUT or LEGAL intent: finalize as disqualified immediately.
+- If CRM lookup returns found=true with complete profile (industry, company_size, seniority all present): skip enrichment, go directly to scoring.
+- If enrichment returns LOW confidence (<0.50) on key fields: note the uncertainty — do not assume high seniority or intent from weak signals.
+- Otherwise: enrich, score, and draft outreach only for hot/warm tiers.
 
 RULES:
 - Output a single AgentAction as strict JSON. No markdown fences. No extra text.
 - Pick exactly one tool per response.
-- Set is_final=true ONLY when all applicable triage steps are complete.
+- Set is_final=true ONLY when triage is complete.
 - Do not repeat a tool call with the same arguments.
 
 AVAILABLE TOOLS:
@@ -51,17 +57,15 @@ enrich_lead
 
 score_lead
   {"email": "<email>", "name": "<name>", "company": "<company>", "message": "<message>", "enrichment": {<enrichment dict>}, "llm_adjustment": 0}
-  Score the lead 0-100 using deterministic rules + bounded LLM nudge (-10..+10).
-  Returns tier (hot/warm/cold/disqualified) and route.
+  Score the lead 0-100. Returns tier (hot/warm/cold/disqualified) and route.
 
 draft_outreach
   {"email": "<email>", "name": "<name>", "company": "<company>", "enrichment": {<enrichment dict>}, "tier": "<tier>"}
-  Draft an outreach email based on the tier. Status is always "draft" — NEVER sends.
-  ONLY call for hot or warm leads. Do NOT call for cold or disqualified.
+  Draft an outreach email. ONLY for hot or warm tiers. Status is always "draft".
 
 OUTPUT FORMAT — strict JSON, no markdown fences:
 {
-  "reasoning": "<why this action now>",
+  "reasoning": "<why this action now — reference observations>",
   "tool": "<tool name or empty when is_final>",
   "tool_args": {},
   "is_final": false
@@ -69,8 +73,11 @@ OUTPUT FORMAT — strict JSON, no markdown fences:
 
 _MAX_STEPS = 10
 
+# Confidence threshold below which seniority/intent are downgraded
+_CONFIDENCE_GATE = 0.50
 
-def _build_user_prompt(lead: Lead, steps: list[LoopStep]) -> str:
+
+def _build_user_prompt(lead: Lead, steps: list[LoopStep], pre_signals: dict | None = None) -> str:
     lead_block = (
         f"LEAD:\n"
         f"  email: {lead.email}\n"
@@ -79,6 +86,13 @@ def _build_user_prompt(lead: Lead, steps: list[LoopStep]) -> str:
         f"  message: {lead.message}\n"
         f"  source: {lead.source}\n"
     )
+
+    signals_block = ""
+    if pre_signals:
+        lines = ["PRE-SIGNALS:"]
+        for k, v in pre_signals.items():
+            lines.append(f"  {k}: {v}")
+        signals_block = "\n".join(lines) + "\n"
 
     if steps:
         lines = ["PRIOR STEPS:"]
@@ -94,7 +108,7 @@ def _build_user_prompt(lead: Lead, steps: list[LoopStep]) -> str:
     else:
         history = "PRIOR STEPS: (none — first action)\n"
 
-    return f"{lead_block}\n{history}\nWhat is the SINGLE next action? Output AgentAction JSON only."
+    return f"{lead_block}\n{signals_block}{history}\nWhat is the SINGLE next action? Output AgentAction JSON only."
 
 
 def _parse_action(raw: str) -> AgentAction:
@@ -174,6 +188,80 @@ def _inject_context(
     return args
 
 
+def _compute_pre_signals(lead: Lead) -> dict:
+    """Compute pre-loop signals from the lead's input fields.
+
+    These are cheap, deterministic checks that run before any tool calls.
+    They inform the loop's branching decisions.
+    """
+    from gtm_triage.enrichment.email_signal import check_email
+    from gtm_triage.enrichment.extraction import extract_lead_signals
+
+    signals: dict = {}
+
+    # Email validity
+    email_signal = check_email(lead.email, skip_dns=True)
+    signals["email_verdict"] = email_signal.verdict
+    signals["email_is_free"] = email_signal.is_free
+    signals["email_is_disposable"] = email_signal.is_disposable
+
+    # Extraction (seniority + intent from the lead's own words)
+    extraction = extract_lead_signals(
+        name=lead.name, message=lead.message, email=lead.email,
+    )
+    signals["extracted_intent"] = extraction.intent
+    signals["extracted_intent_confidence"] = extraction.intent_confidence
+    signals["extracted_seniority"] = extraction.seniority
+    signals["extracted_seniority_confidence"] = extraction.seniority_confidence
+    signals["extracted_role"] = extraction.role
+
+    return signals
+
+
+def _determine_trace_path(pre_signals: dict, crm_found: bool = False, crm_complete: bool = False) -> str:
+    """Determine which trace path this lead should follow based on signals."""
+    # Priority order: short-circuits first, then CRM, then confidence, then clean
+    verdict = pre_signals.get("email_verdict", "")
+    if verdict in ("invalid", "disposable"):
+        return "SHORT_CIRCUIT_INVALID"
+
+    intent = pre_signals.get("extracted_intent", "")
+    intent_conf = pre_signals.get("extracted_intent_confidence", 0.0)
+    if intent in ("opt_out", "legal_or_compliance") and intent_conf >= _CONFIDENCE_GATE:
+        return "SHORT_CIRCUIT_INTENT"
+
+    if crm_found and crm_complete:
+        return "CRM_HIT_SKIP_ENRICH"
+
+    sen_conf = pre_signals.get("extracted_seniority_confidence", 0.0)
+    seniority = pre_signals.get("extracted_seniority", "")
+    if seniority and sen_conf < _CONFIDENCE_GATE:
+        return "LOW_CONFIDENCE_GATE"
+
+    return "CLEAN_FULL_PATH"
+
+
+def _apply_confidence_gate(enrichment_output: dict, pre_signals: dict) -> dict:
+    """Downgrade low-confidence seniority/intent before scoring.
+
+    If extraction confidence is below the gate threshold, set the field
+    to 'unknown' so it doesn't contribute points on shaky evidence.
+    """
+    output = dict(enrichment_output)
+
+    sen_conf = pre_signals.get("extracted_seniority_confidence", 0.0)
+    if sen_conf < _CONFIDENCE_GATE and output.get("seniority", "unknown") != "unknown":
+        output["seniority"] = "unknown"
+        output["seniority_gated"] = True
+
+    intent_conf = pre_signals.get("extracted_intent_confidence", 0.0)
+    if intent_conf < _CONFIDENCE_GATE and output.get("extracted_intent", "unknown") != "unknown":
+        output["extracted_intent"] = "unknown"
+        output["intent_gated"] = True
+
+    return output
+
+
 def run_triage(
     lead: Lead,
     executor: Executor,
@@ -191,19 +279,64 @@ def run_triage(
         "model": model,
     })
 
+    # ── Pre-loop signal checks ───────────────────────────────────────────
+    pre_signals = _compute_pre_signals(lead)
+
     trace.write(
         run_id=run_id,
         event_type="run_start",
         agent="loop_agent",
-        payload={"lead": lead.model_dump()},
+        payload={"lead": lead.model_dump(), "pre_signals": pre_signals},
     )
 
     steps: list[LoopStep] = []
     result = TriageResult(run_id=run_id, lead_email=lead.email)
 
+    # ── Short-circuit: invalid/disposable email ──────────────────────────
+    if pre_signals["email_verdict"] in ("invalid", "disposable"):
+        result.final_tier = "disqualified"
+        result.final_route = "drop"
+        result.trace_path = "SHORT_CIRCUIT_INVALID"
+        steps.append(LoopStep(
+            step_index=0,
+            action=AgentAction(
+                reasoning=f"Email verdict is {pre_signals['email_verdict']}. Disqualifying immediately.",
+                tool="",
+                is_final=True,
+            ),
+            observation=Observation(),
+        ))
+        result.steps = steps
+        _finalize_trace(trace, run_id, result, lead, pre_signals)
+        return result
+
+    # ── Short-circuit: opt_out / legal intent ────────────────────────────
+    intent = pre_signals.get("extracted_intent", "")
+    intent_conf = pre_signals.get("extracted_intent_confidence", 0.0)
+    if intent in ("opt_out", "legal_or_compliance") and intent_conf >= _CONFIDENCE_GATE:
+        result.final_tier = "disqualified"
+        result.final_route = "drop"
+        result.trace_path = "SHORT_CIRCUIT_INTENT"
+        steps.append(LoopStep(
+            step_index=0,
+            action=AgentAction(
+                reasoning=f"Extracted intent is '{intent}' (confidence {intent_conf:.2f}). Disqualifying — compliance stop.",
+                tool="",
+                is_final=True,
+            ),
+            observation=Observation(),
+        ))
+        result.steps = steps
+        _finalize_trace(trace, run_id, result, lead, pre_signals)
+        return result
+
+    # ── Full agent loop ──────────────────────────────────────────────────
+    # Trace path will be refined after CRM lookup and enrichment.
+    trace_path = "CLEAN_FULL_PATH"
+
     for step_idx in range(_MAX_STEPS):
         step_id = f"step_{step_idx}"
-        user_prompt = _build_user_prompt(lead, steps)
+        user_prompt = _build_user_prompt(lead, steps, pre_signals)
 
         t0 = time.time()
         chat_result = chat(
@@ -255,6 +388,22 @@ def run_triage(
             t_tool = time.time()
             output, error = executor.dispatch(action.tool, injected_args, run_id, step_id)
             tool_duration = int((time.time() - t_tool) * 1000)
+
+            # ── Post-tool branching decisions ────────────────────────
+            # CRM hit → check if we should skip enrichment
+            if action.tool == "crm_lookup" and output and output.get("found"):
+                has_industry = bool(output.get("industry"))
+                has_size = bool(output.get("company_size"))
+                has_seniority = bool(output.get("seniority"))
+                if has_industry and has_size and has_seniority:
+                    trace_path = "CRM_HIT_SKIP_ENRICH"
+
+            # Enrichment → apply confidence gate
+            if action.tool == "enrich_lead" and output:
+                output = _apply_confidence_gate(output, pre_signals)
+                if output.get("seniority_gated"):
+                    trace_path = "LOW_CONFIDENCE_GATE"
+
             obs = Observation(output=output, error=error)
 
             # Record tool-internal LLM token usage in trace
@@ -294,7 +443,19 @@ def run_triage(
             break
 
     result.steps = steps
+    result.trace_path = trace_path
+    _finalize_trace(trace, run_id, result, lead, pre_signals)
+    return result
 
+
+def _finalize_trace(
+    trace: TraceStore,
+    run_id: str,
+    result: TriageResult,
+    lead: Lead,
+    pre_signals: dict,
+) -> None:
+    """Write the run_end trace event and close Langfuse."""
     trace.write(
         run_id=run_id,
         event_type="run_end",
@@ -303,15 +464,15 @@ def run_triage(
             "lead_email": lead.email,
             "final_tier": result.final_tier,
             "final_route": result.final_route,
-            "steps_taken": len(steps),
+            "trace_path": result.trace_path,
+            "steps_taken": len(result.steps),
+            "pre_signals": pre_signals,
         },
     )
 
-    # End Langfuse trace (no-op if disabled)
     end_trace(run_id, metadata={
         "lead_email": lead.email,
         "final_tier": result.final_tier,
         "final_route": result.final_route,
+        "trace_path": result.trace_path,
     })
-
-    return result

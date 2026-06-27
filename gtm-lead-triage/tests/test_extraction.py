@@ -74,6 +74,25 @@ class TestSeniorityExtraction:
         )
         assert r.seniority == "director"  # senior program manager → director
 
+    def test_third_person_our_cto(self):
+        """'our CTO shared' → c_level but LOW confidence (third-person reference)."""
+        r = extract_lead_signals(
+            message="Your product was on the shortlist our CTO shared.",
+        )
+        assert r.seniority == "c_level"
+        assert r.seniority_confidence < 0.50  # below confidence gate
+
+    def test_third_person_my_manager(self):
+        r = extract_lead_signals(message="My manager asked me to gather options.")
+        assert r.seniority == "manager"
+        assert r.seniority_confidence < 0.50
+
+    def test_first_person_i_am_the_cto(self):
+        """'I'm the CTO' → c_level with HIGH confidence (first-person)."""
+        r = extract_lead_signals(message="I'm the CTO and I need a demo.")
+        assert r.seniority == "c_level"
+        assert r.seniority_confidence >= 0.70
+
     def test_no_seniority_signal(self):
         r = extract_lead_signals(name="Alex Z", message="What does your product do?")
         assert r.seniority == ""

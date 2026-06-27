@@ -32,3 +32,4 @@ class TriageResult(BaseModel):
     steps: list[LoopStep] = Field(default_factory=list)
     final_tier: str | None = None
     final_route: str | None = None
+    trace_path: str = ""

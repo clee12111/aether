@@ -53,8 +53,19 @@ def _extract_last_observation(user_prompt: str, tool_name: str) -> str:
     return ""
 
 
+def _extract_pre_signal(user_prompt: str, key: str) -> str:
+    """Extract a pre-signal value from the PRE-SIGNALS block."""
+    m = re.search(rf"{key}:\s*(.+?)(?:\n|$)", user_prompt)
+    return m.group(1).strip() if m else ""
+
+
 def _mock_response(system: str, user: str) -> str:
-    """Generate deterministic AgentAction JSON based on lead facts and step history."""
+    """Generate deterministic AgentAction JSON based on lead facts, pre-signals, and step history.
+
+    Phase D: branches on pre-signals (email validity, extraction intent/seniority)
+    and tool observations (CRM hit, enrichment confidence). Different leads produce
+    different trace shapes.
+    """
     lead_block = _extract_lead_block(user)
     prior_tools = _extract_prior_tools(user)
 
@@ -74,10 +85,39 @@ def _mock_response(system: str, user: str) -> str:
         elif line.startswith("message:"):
             message = line.split(":", 1)[1].strip()
 
-    # Step sequence: crm_lookup -> enrich_lead -> score_lead -> [draft_outreach if hot/warm] -> final
+    # ── Branch on pre-signals ────────────────────────────────────────────
+    # Short-circuits are handled in run_triage before the loop starts,
+    # so the mock should never see them. But if it does, finalize.
+
+    email_verdict = _extract_pre_signal(user, "email_verdict")
+    if email_verdict in ("invalid", "disposable"):
+        return json.dumps({
+            "reasoning": f"Pre-signal: email is {email_verdict}. Disqualifying.",
+            "tool": "",
+            "tool_args": {},
+            "is_final": True,
+        })
+
+    extracted_intent = _extract_pre_signal(user, "extracted_intent")
+    intent_conf = _extract_pre_signal(user, "extracted_intent_confidence")
+    try:
+        intent_conf_f = float(intent_conf) if intent_conf else 0.0
+    except ValueError:
+        intent_conf_f = 0.0
+
+    if extracted_intent in ("opt_out", "legal_or_compliance") and intent_conf_f >= 0.50:
+        return json.dumps({
+            "reasoning": f"Pre-signal: intent is {extracted_intent} (confidence {intent_conf}). Disqualifying.",
+            "tool": "",
+            "tool_args": {},
+            "is_final": True,
+        })
+
+    # ── Standard tool sequence with observation-driven branching ─────────
+
     if "crm_lookup" not in prior_tools:
         return json.dumps({
-            "reasoning": "First step: look up the lead in the CRM to check for existing records.",
+            "reasoning": "First step: look up the lead in the CRM.",
             "tool": "crm_lookup",
             "tool_args": {"email": email},
             "is_final": False,
@@ -91,7 +131,7 @@ def _mock_response(system: str, user: str) -> str:
             pass
         else:
             return json.dumps({
-                "reasoning": "CRM lookup complete. Now enrich the lead with company/role data.",
+                "reasoning": "CRM lookup done. Enriching lead with company/role data.",
                 "tool": "enrich_lead",
                 "tool_args": {"email": email, "company": company, "name": name, "message": message},
                 "is_final": False,
@@ -99,7 +139,7 @@ def _mock_response(system: str, user: str) -> str:
 
     if "score_lead" not in prior_tools:
         return json.dumps({
-            "reasoning": "Enrichment complete. Score the lead using rules + enrichment data.",
+            "reasoning": "Enrichment complete. Scoring the lead.",
             "tool": "score_lead",
             "tool_args": {
                 "email": email,
@@ -118,9 +158,8 @@ def _mock_response(system: str, user: str) -> str:
         tier = tier_match.group(1)
 
     if tier in ("cold", "disqualified"):
-        # No outreach for cold/disqualified — finalize
         return json.dumps({
-            "reasoning": f"Lead scored as {tier}. No outreach draft needed. Finalizing.",
+            "reasoning": f"Lead scored as {tier}. No outreach needed. Finalizing.",
             "tool": "",
             "tool_args": {},
             "is_final": True,
@@ -128,7 +167,7 @@ def _mock_response(system: str, user: str) -> str:
 
     if "draft_outreach" not in prior_tools:
         return json.dumps({
-            "reasoning": "Scoring complete. Draft outreach based on the tier.",
+            "reasoning": "Lead is warm or hot. Drafting outreach.",
             "tool": "draft_outreach",
             "tool_args": {
                 "email": email,
@@ -142,7 +181,7 @@ def _mock_response(system: str, user: str) -> str:
 
     # All tools called — finalize
     return json.dumps({
-        "reasoning": "All triage steps complete. Lead has been looked up, enriched, scored, and outreach drafted.",
+        "reasoning": "Triage complete.",
         "tool": "",
         "tool_args": {},
         "is_final": True,

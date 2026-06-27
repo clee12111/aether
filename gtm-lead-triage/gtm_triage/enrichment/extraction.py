@@ -177,6 +177,15 @@ def _extract_seniority(name: str, message: str) -> tuple[str, str, float]:
         m = re.search(pattern, text)
         if m:
             role = role_hint or m.group(0).strip()
+            # Check for third-person reference — "our CTO shared", "my manager said"
+            # These describe someone ELSE, not the sender. Possessives (our/my/their/
+            # his/her) before a title signal third-person. "The" alone doesn't count
+            # because "I'm the CTO" is first-person.
+            match_start = m.start()
+            preceding = text[max(0, match_start - 15):match_start].strip()
+            if re.search(r"\b(?:our|my|their|his|her)\s*$", preceding):
+                # Third-person reference: lower confidence significantly
+                return seniority, role, 0.35
             return seniority, role, 0.75
 
     # Check name field (lower confidence — self-reported title)

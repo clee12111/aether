@@ -203,6 +203,7 @@ def run_eval(
             "score_detail": result.score,
             "enrichment_detail": result.enrichment,
             "steps_taken": len(result.steps),
+            "trace_path": result.trace_path,
         }
         case_results.append(case_result)
 
