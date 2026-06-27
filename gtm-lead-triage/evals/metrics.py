@@ -148,6 +148,7 @@ def run_eval(
     provider: str = "mock",
     model: str = "gpt-4o-mini",
     enrichment_mode: str = "regex",
+    extractor: str = "B",
 ) -> tuple[list[dict], dict]:
     """Run the full agent loop on all leads, return (case_results, summary_metrics)."""
 
@@ -163,7 +164,7 @@ def run_eval(
 
     registry = ToolRegistry([
         CRMLookupTool(crm),
-        EnrichLeadTool(provider=provider, model=model, enrichment_provider=enrichment_provider),
+        EnrichLeadTool(provider=provider, model=model, enrichment_provider=enrichment_provider, extractor=extractor),
         ScoreLeadTool(provider=provider, model=model),
         DraftOutreachTool(),
     ])
@@ -309,6 +310,8 @@ def main() -> int:
                         help="LLM provider")
     parser.add_argument("--enrichment", default="regex", choices=["regex", "pdl"],
                         help="Enrichment mode: regex (legacy) or pdl (waterfall via cassettes)")
+    parser.add_argument("--extractor", default="B", choices=["A", "B"],
+                        help="Extractor: A (Phase E flat) or B (Phase E.2 atomic signals)")
     parser.add_argument("--model", default="gpt-4o-mini", help="Model name")
     parser.add_argument("--output", default=None, help="Output JSONL path (default: auto-generated)")
     args = parser.parse_args()
@@ -316,9 +319,9 @@ def main() -> int:
     lead_set = _load_leads(args.set)
     case_results, summary = run_eval(
         lead_set, provider=args.provider, model=args.model,
-        enrichment_mode=args.enrichment,
+        enrichment_mode=args.enrichment, extractor=args.extractor,
     )
-    label = f"{args.set} (enrichment={args.enrichment})"
+    label = f"{args.set} (enrichment={args.enrichment}, extractor={args.extractor})"
     print_report(case_results, summary, label, args.provider)
 
     # Write JSONL
@@ -328,7 +331,8 @@ def main() -> int:
         date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
         results_dir = Path(__file__).parent / "results"
         enrich_tag = f"_{args.enrichment}" if args.enrichment != "regex" else ""
-        output_path = results_dir / f"eval_{args.set}_{args.provider}{enrich_tag}_{date_str}.jsonl"
+        ext_tag = f"_ext{args.extractor}" if args.extractor != "B" else ""
+        output_path = results_dir / f"eval_{args.set}_{args.provider}{enrich_tag}{ext_tag}_{date_str}.jsonl"
 
     write_jsonl(case_results, summary, label, args.provider, output_path)
     print(f"  Results written to: {output_path}\n")

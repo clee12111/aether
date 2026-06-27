@@ -105,10 +105,12 @@ class EnrichLeadTool(BaseTool):
         provider: str = "mock",
         model: str = "gpt-4o-mini",
         enrichment_provider: "EnrichmentProvider | None" = None,
+        extractor: str = "A",  # "A" = Phase E flat (default), "B" = Phase E.2 atomic signals
     ) -> None:
         self._provider = provider
         self._model = model
         self._enrichment_provider = enrichment_provider
+        self._extractor = extractor
 
     @property
     def name(self) -> str:
@@ -122,25 +124,33 @@ class EnrichLeadTool(BaseTool):
 
         # ── New path: delegate to EnrichmentProvider ─────────────────────
         if self._enrichment_provider is not None:
-            from gtm_triage.enrichment.signals import (
-                extract_signals_llm,
-                extract_signals_mock,
-                signals_to_extraction_result,
-            )
             result = self._enrichment_provider.enrich(email, name, company, message)
 
-            # Run atomic signal extraction on the lead's own words
-            if self._provider == "openai":
-                sig_extraction = extract_signals_llm(
-                    name=name, message=message, email=email, model=self._model,
-                )
+            # Run extraction — A (Phase E flat) or B (Phase E.2 atomic signals)
+            if self._extractor == "A":
+                from gtm_triage.enrichment.extraction import extract_lead_signals, extract_lead_signals_llm
+                if self._provider == "openai":
+                    extraction = extract_lead_signals_llm(
+                        name=name, message=message, email=email, model=self._model,
+                    )
+                else:
+                    extraction = extract_lead_signals(name=name, message=message, email=email)
+                sig_extraction = None  # no atomic signals in A path
             else:
-                sig_extraction = extract_signals_mock(
-                    name=name, message=message, email=email,
+                from gtm_triage.enrichment.signals import (
+                    extract_signals_llm,
+                    extract_signals_mock,
+                    signals_to_extraction_result,
                 )
-
-            # Convert to legacy ExtractionResult (attribution-aware)
-            extraction = signals_to_extraction_result(sig_extraction, email=email)
+                if self._provider == "openai":
+                    sig_extraction = extract_signals_llm(
+                        name=name, message=message, email=email, model=self._model,
+                    )
+                else:
+                    sig_extraction = extract_signals_mock(
+                        name=name, message=message, email=email,
+                    )
+                extraction = signals_to_extraction_result(sig_extraction, email=email)
 
             # Merge: extraction seniority wins over enrichment if higher confidence
             if extraction.seniority and extraction.seniority_confidence > result.seniority.confidence:
@@ -162,7 +172,8 @@ class EnrichLeadTool(BaseTool):
             # Pass intent + raw signals through for scoring
             flat["extracted_intent"] = extraction.intent
             flat["extracted_intent_confidence"] = extraction.intent_confidence
-            flat["atomic_signals"] = [s.model_dump() for s in sig_extraction.signals]
+            if sig_extraction is not None:
+                flat["atomic_signals"] = [s.model_dump() for s in sig_extraction.signals]
             # Add token placeholders for compatibility
             flat["llm_tokens_in"] = 0
             flat["llm_tokens_out"] = 0

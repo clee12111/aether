@@ -235,18 +235,30 @@ CRITICAL RULES:
    - "mentioned": sender casually references someone ("Our CTO shared this")
    - "n_a": for non-seniority signals
 
-3. EVIDENCE: Copy the exact verbatim span from the message that justifies the signal. Must be a real substring.
+3. VALUE must be the ENUM value, not freeform text:
+   - For type="seniority": value MUST be one of: c_level, vp, director, manager, ic, unknown
+   - For type="intent": value MUST be one of: high, medium, low
+   - For type="opt_out": value MUST be "opt_out"
+   - For type="legal": value MUST be "legal_or_compliance"
+   - For type="spam": value MUST be "spam"
+   - For type="timeline": value = the timeframe (e.g. "Q3", "this week", "tomorrow")
+   - For type="deal_size": value = the quantity (e.g. "200 seats", "80 licenses")
+   - For type="objection": value = short label (e.g. "competitor_locked", "compliance_blocker")
+   - For type="fit": value = short label (e.g. "scale_question", "free_tier_request")
+   Freeform descriptive text goes in "evidence", NOT in "value".
 
-4. For non-English messages, translate internally but extract normally. Evidence spans should be from the original text.
+4. EVIDENCE: Copy the exact verbatim span from the message. Must be a real substring.
 
-5. Do NOT over-extract. If the message is empty or says just "Hi", return an empty signals list.
+5. For non-English messages, translate internally but extract normally. Evidence spans from the original text.
 
-6. Confidence: 0.9 for explicit first-person claims, 0.7 for clear signals, 0.4 for inferred/ambiguous, 0.2 for weak/third-person mentions.
+6. Do NOT over-extract. If the message is empty or says just "Hi", return an empty signals list.
+
+7. Confidence: 0.9 for explicit first-person claims, 0.7 for clear signals, 0.4 for inferred, 0.2 for third-person.
 
 Return ONLY valid JSON (no markdown fences):
 {"signals": [
   {"type": "seniority|intent|timeline|deal_size|fit|objection|opt_out|legal|spam",
-   "value": "...",
+   "value": "ENUM_VALUE (see rule 3)",
    "subject": "sender|third_party|company",
    "relation": "self|sponsor_delegated|mentioned|n_a",
    "evidence": "verbatim span from message",
@@ -361,33 +373,27 @@ def signals_to_extraction_result(
         # Sponsor-delegated intent (counts because a VP is backing this)
         sponsor_intent = extraction.sponsor_intent()
 
-        def _normalize_intent(val: str) -> str:
-            """Map LLM intent values to the enum. The LLM may return
-            freeform text; normalize to the closest intent level."""
+        def _clean_intent(val: str) -> str:
+            """Validate LLM intent value is a known enum. With the
+            constrained schema prompt, value should already be correct.
+            Fallback to 'unknown' if not recognized."""
             v = val.lower().strip()
-            if v in ("high", "medium", "low", "opt_out", "legal_or_compliance", "unknown"):
+            if v in ("high", "medium", "low", "opt_out", "legal_or_compliance"):
                 return v
-            # Heuristic mapping for common LLM outputs
-            if any(kw in v for kw in ("buy", "purchase", "contract", "budget", "demo", "onboard", "trial", "urgent", "license")):
-                return "high"
-            if any(kw in v for kw in ("evaluat", "interest", "explor", "consider", "shortlist", "learn")):
-                return "medium"
-            if any(kw in v for kw in ("curious", "info", "question", "browse")):
-                return "low"
-            return "high" if len(v) > 3 else "unknown"  # non-empty freeform = some intent
+            return "unknown"
 
         if sender_intent and sponsor_intent:
             if sponsor_intent.confidence >= sender_intent.confidence:
-                intent = _normalize_intent(sponsor_intent.value)
+                intent = _clean_intent(sponsor_intent.value)
                 intent_conf = sponsor_intent.confidence
             else:
-                intent = _normalize_intent(sender_intent.value)
+                intent = _clean_intent(sender_intent.value)
                 intent_conf = sender_intent.confidence
         elif sponsor_intent:
-            intent = _normalize_intent(sponsor_intent.value)
+            intent = _clean_intent(sponsor_intent.value)
             intent_conf = sponsor_intent.confidence
         elif sender_intent:
-            intent = _normalize_intent(sender_intent.value)
+            intent = _clean_intent(sender_intent.value)
             intent_conf = sender_intent.confidence
 
     # Company from email domain
