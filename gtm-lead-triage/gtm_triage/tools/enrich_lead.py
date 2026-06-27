@@ -122,6 +122,12 @@ class EnrichLeadTool(BaseTool):
         name = args.get("name", "")
         message = args.get("message", "")
 
+        # Prompt-injection detection (flag, don't block — scorer is the backstop)
+        from gtm_triage.security import detect_injection
+        injection_detected, injection_pattern = detect_injection(message)
+        if injection_detected:
+            logger.warning("Prompt injection detected in lead %s: %r", email, injection_pattern)
+
         # ── New path: delegate to EnrichmentProvider ─────────────────────
         if self._enrichment_provider is not None:
             result = self._enrichment_provider.enrich(email, name, company, message)
@@ -174,6 +180,9 @@ class EnrichLeadTool(BaseTool):
             flat["extracted_intent_confidence"] = extraction.intent_confidence
             if sig_extraction is not None:
                 flat["atomic_signals"] = [s.model_dump() for s in sig_extraction.signals]
+            if injection_detected:
+                flat["injection_flagged"] = True
+                flat["injection_pattern"] = injection_pattern
             # Add token placeholders for compatibility
             flat["llm_tokens_in"] = 0
             flat["llm_tokens_out"] = 0

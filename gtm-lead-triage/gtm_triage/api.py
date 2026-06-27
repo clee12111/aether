@@ -200,16 +200,17 @@ from gtm_triage.middleware import (
     global_exception_handler,
 )
 
-# CORS — allow the frontend origin (configurable, default localhost:3000)
-_cors_origins = os.environ.get(
-    "FRONTEND_ORIGIN",
-    os.environ.get("CORS_ORIGINS", "http://localhost:3000"),
-).split(",")
+# CORS — locked to known frontend origins (no wildcard in production)
+_cors_origins = [
+    o.strip() for o in
+    os.environ.get("FRONTEND_ORIGIN", os.environ.get("CORS_ORIGINS", "http://localhost:3000")).split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "X-API-Key", "Content-Type"],
 )
 
 # Auth → rate limit → size limit (inside-out execution order)

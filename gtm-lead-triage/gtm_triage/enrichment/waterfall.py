@@ -77,6 +77,12 @@ class WebsiteFallback:
         return self._llm_extract(domain, text)
 
     def _fetch_homepage(self, domain: str) -> str:
+        # SSRF guard: validate domain isn't internal before connecting
+        from gtm_triage.security import ssrf_safe_domain
+        if not ssrf_safe_domain(domain):
+            logger.warning("SSRF blocked: refusing to fetch %s", domain)
+            return ""
+
         try:
             client = self._get_client()
             resp = client.get(f"https://{domain}", timeout=8.0)
