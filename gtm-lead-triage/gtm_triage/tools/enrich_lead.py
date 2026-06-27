@@ -122,11 +122,17 @@ class EnrichLeadTool(BaseTool):
 
         # ── New path: delegate to EnrichmentProvider ─────────────────────
         if self._enrichment_provider is not None:
-            from gtm_triage.enrichment.extraction import extract_lead_signals
+            from gtm_triage.enrichment.extraction import extract_lead_signals, extract_lead_signals_llm
             result = self._enrichment_provider.enrich(email, name, company, message)
 
             # Run extraction on the lead's own words
-            extraction = extract_lead_signals(name=name, message=message, email=email)
+            # LLM extraction when provider=openai; heuristic otherwise
+            if self._provider == "openai":
+                extraction = extract_lead_signals_llm(
+                    name=name, message=message, email=email, model=self._model,
+                )
+            else:
+                extraction = extract_lead_signals(name=name, message=message, email=email)
 
             # Merge: extraction seniority wins over enrichment if higher confidence
             if extraction.seniority and extraction.seniority_confidence > result.seniority.confidence:

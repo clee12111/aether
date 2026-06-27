@@ -831,5 +831,435 @@
         "message": "No records were found matching your request"
       }
     }
+  },
+  "j.kim@palantir.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "j kim",
+        "first_name": "j kim",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Palantir Technologies",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "s.berg@netflix.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "s berg",
+        "first_name": "s berg",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Netflix",
+        "job_company_size": "10001+",
+        "job_company_industry": "internet",
+        "industry": "internet",
+        "work_email": true
+      }
+    }
+  },
+  "c.mueller@basf.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "c mueller",
+        "first_name": "c mueller",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "BASF",
+        "job_company_size": "10001+",
+        "job_company_industry": "chemicals",
+        "industry": "chemicals",
+        "work_email": true
+      }
+    }
+  },
+  "a.park@samsung.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "a park",
+        "first_name": "a park",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Samsung",
+        "job_company_size": "10001+",
+        "job_company_industry": "consumer electronics",
+        "industry": "consumer electronics",
+        "work_email": true
+      }
+    }
+  },
+  "t.nguyen@shopify.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "t nguyen",
+        "first_name": "t nguyen",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Shopify",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "r.costa@itau.com.br": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "r costa",
+        "first_name": "r costa",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Itau Unibanco",
+        "job_company_size": "10001+",
+        "job_company_industry": "banking",
+        "industry": "banking",
+        "work_email": true
+      }
+    }
+  },
+  "m.jones@lyft.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "m jones",
+        "first_name": "m jones",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Lyft",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "internet",
+        "industry": "internet",
+        "work_email": true
+      }
+    }
+  },
+  "k.tanaka@yahoo.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "h.schmidt@bmw.de": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "h schmidt",
+        "first_name": "h schmidt",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "BMW",
+        "job_company_size": "10001+",
+        "job_company_industry": "automotive",
+        "industry": "automotive",
+        "work_email": true
+      }
+    }
+  },
+  "d.okonkwo@stripe.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "d okonkwo",
+        "first_name": "d okonkwo",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Stripe",
+        "job_company_size": "5001-10000",
+        "job_company_industry": "financial services",
+        "industry": "financial services",
+        "work_email": true
+      }
+    }
+  },
+  "research@nyu.edu": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "hello@tinyshop.io": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "admin@coinbase.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "admin",
+        "first_name": "admin",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Coinbase",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "financial services",
+        "industry": "financial services",
+        "work_email": true
+      }
+    }
+  },
+  "intern.2025@salesforce.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "intern",
+        "first_name": "intern",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Salesforce",
+        "job_company_size": "10001+",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "procurement@va.gov": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "dev42@protonmail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "t.wright@oracle.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "t wright",
+        "first_name": "t wright",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Oracle",
+        "job_company_size": "10001+",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "bounce@10minutemail.com": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "legal@zoom.us": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "legal",
+        "first_name": "legal",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Zoom",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "spam@quickbucks.biz": {
+    "status_code": 404,
+    "body": {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      }
+    }
+  },
+  "unsubscribe@airbnb.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "unsubscribe",
+        "first_name": "unsubscribe",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Airbnb",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "internet",
+        "industry": "internet",
+        "work_email": true
+      }
+    }
+  },
+  "events@atlassian.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "events",
+        "first_name": "events",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Atlassian",
+        "job_company_size": "5001-10000",
+        "job_company_industry": "computer software",
+        "industry": "computer software",
+        "work_email": true
+      }
+    }
+  },
+  "press@dropbox.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "press",
+        "first_name": "press",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Dropbox",
+        "job_company_size": "1001-5000",
+        "job_company_industry": "internet",
+        "industry": "internet",
+        "work_email": true
+      }
+    }
+  },
+  "campus@google.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "campus",
+        "first_name": "campus",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Google",
+        "job_company_size": "10001+",
+        "job_company_industry": "internet",
+        "industry": "internet",
+        "work_email": true
+      }
+    }
+  },
+  "security@apple.com": {
+    "status_code": 200,
+    "body": {
+      "status": 200,
+      "likelihood": 7,
+      "data": {
+        "full_name": "security",
+        "first_name": "security",
+        "last_name": "",
+        "job_title": null,
+        "job_title_role": null,
+        "job_title_levels": null,
+        "job_company_name": "Apple",
+        "job_company_size": "10001+",
+        "job_company_industry": "consumer electronics",
+        "industry": "consumer electronics",
+        "work_email": true
+      }
+    }
   }
 }

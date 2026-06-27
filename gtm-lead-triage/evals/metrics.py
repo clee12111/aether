@@ -42,6 +42,9 @@ def _load_leads(set_name: str) -> list[dict]:
     if set_name == "holdout_v2":
         from evals.holdout_v2 import INDEPENDENT_LEADS
         return INDEPENDENT_LEADS
+    elif set_name == "dev_split":
+        from evals.dev_split import DEV_LEADS
+        return DEV_LEADS
     elif set_name == "golden":
         from evals.cases import GOLDEN_LEADS
         return GOLDEN_LEADS
@@ -300,7 +303,7 @@ def write_jsonl(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="GTM Lead-Triage eval harness")
-    parser.add_argument("--set", default="holdout_v2", choices=["holdout_v2", "golden", "holdout", "mock"],
+    parser.add_argument("--set", default="holdout_v2", choices=["holdout_v2", "dev_split", "golden", "holdout", "mock"],
                         help="Lead set to evaluate")
     parser.add_argument("--provider", default="mock", choices=["mock", "openai"],
                         help="LLM provider")

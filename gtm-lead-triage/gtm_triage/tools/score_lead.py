@@ -185,6 +185,28 @@ def _score_rules(email: str, message: str, enrichment: dict) -> tuple[int, str, 
         reasons.append("spam_free_email_disqualify")
         return 0, "; ".join(reasons), "disqualified"
 
+    # ── Phase E: intent gates firmographics ──────────────────────────────
+    # Good company + no buying intent must NOT reach warm. Firmographics
+    # alone (business_email + enterprise + industry) can accumulate 45+
+    # points even when the lead is an intern, a PR request, or a
+    # sponsorship pitch. Cap at cold (44) when intent is low/unknown AND
+    # seniority doesn't independently justify warm (manager+ is exempt).
+    # Only gate when extraction ran AND found low/no intent. If extraction
+    # returned unknown (e.g., non-English message the heuristic can't parse)
+    # but the keyword fallback DID fire, don't gate — the keyword signal
+    # is real even if extraction missed it.
+    _INTENT_GATE_CAP = 44
+    intent_conf = enrichment.get("extracted_intent_confidence", 0.0)
+    keyword_intent_fired = any(
+        r.startswith("high_intent_message") or r.startswith("medium_intent_message")
+        for r in reasons
+    )
+    if extracted_intent in ("low",) or (extracted_intent in ("unknown", "") and intent_conf == 0.0 and not keyword_intent_fired):
+        sen_justifies_warm = seniority in ("c_level", "vp", "director", "manager")
+        if not sen_justifies_warm and points > _INTENT_GATE_CAP:
+            points = _INTENT_GATE_CAP
+            reasons.append(f"intent_gate_cap({_INTENT_GATE_CAP})")
+
     points = max(0, min(100, points))
     return points, "; ".join(reasons), None
 

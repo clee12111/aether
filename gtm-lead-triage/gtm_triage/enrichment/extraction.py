@@ -87,6 +87,8 @@ _LEGAL_PATTERNS = [
     r"\bfreedom of information\b",
     r"\bregulatory (?:inquiry|review|audit)\b",
     r"\bcompliance (?:review|audit|inquiry)\b",
+    r"\bnot a sales inquiry\b",
+    r"\bphishing (?:simulation|test|report)\b",
 ]
 
 # Opt-out — lead wants to disengage
@@ -99,6 +101,8 @@ _OPT_OUT_PATTERNS = [
     r"\bno further (?:communications?|emails?|contact)\b",
     r"\bmailing list\b",
     r"\b(?:i(?:'ve| have)) asked (?:three|multiple|several) times\b",
+    r"\bdo not wish to receive\b",
+    r"\bremove (?:my|this) (?:address|email)\b",
 ]
 
 # High intent — ready to buy or in late funnel
@@ -256,6 +260,104 @@ def _extract_intent(message: str) -> tuple[IntentLevel, float]:
     return "unknown", 0.0
 
 
+def extract_lead_signals_llm(
+    name: str = "",
+    message: str = "",
+    email: str = "",
+    model: str = "gpt-4o-mini",
+) -> ExtractionResult:
+    """Extract seniority, role, intent via LLM structured output.
+
+    Handles what the heuristic can't: third-person attribution, non-English,
+    nuanced roles, ambiguous references. Returns calibrated confidence.
+    Falls back to the heuristic path on any failure.
+    """
+    import json as _json
+    import os
+
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        return extract_lead_signals(name=name, message=message, email=email)
+
+    text_block = ""
+    if name:
+        text_block += f"Name: {name}\n"
+    if email:
+        text_block += f"Email: {email}\n"
+    if message:
+        text_block += f"Message: {message}\n"
+
+    if not text_block.strip():
+        return ExtractionResult()
+
+    system = (
+        "You are a B2B lead signal extractor. Given a lead's name, email, and message, "
+        "extract their seniority level and buying intent.\n\n"
+        "CRITICAL RULES:\n"
+        "- seniority: the SENDER's own role, NOT someone they mention. "
+        "'Our CTO shared this' means the SENDER is NOT the CTO. "
+        "'I am the CTO' means the SENDER IS the CTO.\n"
+        "- intent: what the sender wants from US, not what they're offering.\n"
+        "- For non-English messages, translate and extract normally.\n"
+        "- Confidence: 0.9 for explicit first-person claims, 0.7 for clear signals, "
+        "0.4 for inferred/ambiguous, 0.2 for third-person mentions.\n\n"
+        "Return ONLY valid JSON:\n"
+        '{"seniority": "c_level|vp|director|manager|ic|unknown", '
+        '"seniority_confidence": 0.0, '
+        '"role": "stated role or empty", '
+        '"intent": "high|medium|low|opt_out|legal_or_compliance|unknown", '
+        '"intent_confidence": 0.0, '
+        '"reasoning": "one line"}'
+    )
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": text_block},
+            ],
+            max_completion_tokens=200,
+            temperature=0,
+        )
+        raw = resp.choices[0].message.content or ""
+        m = re.search(r"\{[\s\S]*\}", raw)
+        if m:
+            data = _json.loads(m.group(0))
+            # Clamp confidences
+            sen_conf = max(0.0, min(1.0, float(data.get("seniority_confidence", 0.0))))
+            int_conf = max(0.0, min(1.0, float(data.get("intent_confidence", 0.0))))
+
+            # Derive company from email domain
+            company = ""
+            company_conf = 0.0
+            if email and "@" in email:
+                domain = email.rsplit("@", 1)[1].lower()
+                parts = domain.split(".")
+                if len(parts) >= 2:
+                    company = parts[0]
+                    company_conf = 0.30
+
+            return ExtractionResult(
+                seniority=data.get("seniority", "") or "",
+                seniority_confidence=sen_conf,
+                role=data.get("role", "") or "",
+                role_confidence=sen_conf,
+                company=company,
+                company_confidence=company_conf,
+                intent=data.get("intent", "unknown") or "unknown",
+                intent_confidence=int_conf,
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("LLM extraction failed: %s", exc)
+
+    # Fallback to heuristic
+    return extract_lead_signals(name=name, message=message, email=email)
+
+
 def extract_lead_signals(
     name: str = "",
     message: str = "",
@@ -263,8 +365,7 @@ def extract_lead_signals(
 ) -> ExtractionResult:
     """Extract seniority, role, intent, and company from the lead's own words.
 
-    This is the deterministic (mock) path. An LLM path can be added later
-    for ambiguous cases.
+    This is the deterministic (mock/heuristic) path — keyless CI double.
 
     Accepts minimal input: any combination of name/message/email. Missing
     fields produce unknown/low-confidence results, never crash.
