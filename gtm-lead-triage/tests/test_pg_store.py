@@ -26,7 +26,7 @@ def _make_store():
         store = PostgresTraceStore("postgresql://test:test@localhost/test")
 
         # Verify schema creation was called
-        assert mock_cursor.execute.call_count == 3  # events + idx + idempotency
+        assert mock_cursor.execute.call_count == 4  # events + idx + idempotency + daily_usage
         mock_conn.commit.assert_called_once()
 
         # Reset mocks for test usage
@@ -161,3 +161,72 @@ class TestIdempotency:
         assert result is not None
         assert result["run_id"] == "run-1"
         assert result["result"]["tier"] == "hot"
+
+
+class TestDailyUsage:
+    def test_get_returns_zero_when_no_row(self):
+        store, conn, cur = _make_store()
+        cur.fetchone.return_value = None
+
+        assert store.get_daily_usage() == 0
+
+    def test_get_returns_count(self):
+        store, conn, cur = _make_store()
+        cur.fetchone.return_value = {"count": 42}
+
+        assert store.get_daily_usage() == 42
+        sql = cur.execute.call_args[0][0]
+        assert "daily_usage" in sql
+
+    def test_increment_inserts_and_returns(self):
+        store, conn, cur = _make_store()
+        # First fetchone (after upsert) returns the new count
+        cur.fetchone.return_value = {"count": 1}
+
+        result = store.increment_daily_usage()
+
+        assert result == 1
+        # Should have executed the upsert INSERT
+        calls = cur.execute.call_args_list
+        upsert_sql = calls[0][0][0]
+        assert "INSERT INTO daily_usage" in upsert_sql
+        assert "ON CONFLICT" in upsert_sql
+        conn.commit.assert_called_once()
+
+    def test_increment_updates_existing(self):
+        store, conn, cur = _make_store()
+        cur.fetchone.return_value = {"count": 5}
+
+        result = store.increment_daily_usage()
+
+        assert result == 5
+        upsert_sql = cur.execute.call_args_list[0][0][0]
+        assert "daily_usage.count + 1" in upsert_sql
+
+
+class TestGetResultByRunId:
+    def test_returns_none_when_missing(self):
+        store, conn, cur = _make_store()
+        cur.fetchone.return_value = None
+
+        assert store.get_result_by_run_id("run-missing") is None
+
+    def test_returns_result_dict(self):
+        store, conn, cur = _make_store()
+        cur.fetchone.return_value = {
+            "result": {"tier": "warm", "run_id": "run-1"},
+        }
+
+        result = store.get_result_by_run_id("run-1")
+        assert result is not None
+        assert result["tier"] == "warm"
+
+    def test_parses_string_result(self):
+        store, conn, cur = _make_store()
+        cur.fetchone.return_value = {
+            "result": '{"tier": "cold", "run_id": "run-2"}',
+        }
+
+        result = store.get_result_by_run_id("run-2")
+        assert result is not None
+        assert result["tier"] == "cold"

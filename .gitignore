@@ -53,3 +53,6 @@ scratch/
 # stray install artifacts
 $dest/
 ollama-windows-amd64/
+
+.vercel
+.env*

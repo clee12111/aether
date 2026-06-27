@@ -43,6 +43,13 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 );
 """
 
+_CREATE_DAILY_USAGE = """
+CREATE TABLE IF NOT EXISTS daily_usage (
+    usage_date TEXT PRIMARY KEY,
+    count      INTEGER NOT NULL DEFAULT 0
+);
+"""
+
 
 class PostgresTraceStore:
     """Append-only Postgres trace store with the same interface as TraceStore."""
@@ -54,6 +61,7 @@ class PostgresTraceStore:
             cur.execute(_CREATE_EVENTS)
             cur.execute(_CREATE_EVENTS_IDX)
             cur.execute(_CREATE_IDEMPOTENCY)
+            cur.execute(_CREATE_DAILY_USAGE)
         self._conn.commit()
 
     def write(
@@ -189,6 +197,51 @@ class PostgresTraceStore:
                 (key, run_id, json.dumps(result, default=str), now),
             )
         self._conn.commit()
+
+    # ── Daily usage cap ─────────────────────────────────────────────────────
+
+    def get_daily_usage(self) -> int:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT count FROM daily_usage WHERE usage_date = %s",
+                (today,),
+            )
+            row = cur.fetchone()
+        return row["count"] if row else 0
+
+    def increment_daily_usage(self) -> int:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO daily_usage (usage_date, count) VALUES (%s, 1) "
+                "ON CONFLICT (usage_date) DO UPDATE SET count = daily_usage.count + 1",
+                (today,),
+            )
+        self._conn.commit()
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT count FROM daily_usage WHERE usage_date = %s",
+                (today,),
+            )
+            row = cur.fetchone()
+        return row["count"] if row else 1
+
+    # ── Result lookup by run_id ──────────────────────────────────────────
+
+    def get_result_by_run_id(self, run_id: str) -> dict[str, Any] | None:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT result FROM idempotency_keys WHERE run_id = %s",
+                (run_id,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        result = row["result"]
+        if isinstance(result, str):
+            result = json.loads(result)
+        return result
 
     def close(self) -> None:
         self._conn.close()
