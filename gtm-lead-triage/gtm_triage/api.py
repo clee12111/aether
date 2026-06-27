@@ -29,6 +29,7 @@ Config via environment variables:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -244,7 +245,7 @@ def health() -> dict[str, str]:
 
 
 @app.post("/triage")
-def triage(req: TriageRequest) -> dict[str, Any]:
+async def triage(req: TriageRequest) -> dict[str, Any]:
     # Derive idempotency key if not supplied
     idem_key = req.idempotency_key
     if not idem_key:
@@ -278,12 +279,13 @@ def triage(req: TriageRequest) -> dict[str, Any]:
     else:
         eff_executor = _executor  # uses enrichment_provider if configured
 
-    # Run the agent
+    # Run the agent off the request thread (pipeline can take ~10s with LLM)
     lead = Lead(
         email=req.email, name=req.name, company=req.company,
         message=req.message, source=req.source,
     )
-    result = run_triage(
+    result = await asyncio.to_thread(
+        run_triage,
         lead=lead,
         executor=eff_executor,
         trace=_trace,

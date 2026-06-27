@@ -1,10 +1,13 @@
 """API hardening middleware: auth, rate limiting, error handling.
 
 All middleware is configured via environment variables, never hardcoded.
+Auth is FAIL-CLOSED in production: if APP_ENV=production and GTM_API_KEYS
+is unset, all authenticated endpoints reject requests.
 """
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 import time
@@ -33,27 +36,69 @@ def error_response(status_code: int, error_type: str, message: str) -> JSONRespo
 _PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
 
+def _check_auth_startup() -> None:
+    """Log a loud warning (or refuse to start) if auth is misconfigured.
+
+    Called at import time. In production (APP_ENV=production), missing
+    GTM_API_KEYS is a fatal configuration error.
+    """
+    app_env = os.environ.get("APP_ENV", "development")
+    has_keys = bool(os.environ.get("GTM_API_KEYS", "").strip())
+    if app_env == "production" and not has_keys:
+        logger.critical(
+            "FATAL: APP_ENV=production but GTM_API_KEYS is not set. "
+            "Auth will REJECT all requests. Set GTM_API_KEYS or unset APP_ENV."
+        )
+    elif not has_keys:
+        logger.warning(
+            "GTM_API_KEYS not set — auth is DISABLED (development mode). "
+            "Set GTM_API_KEYS for production."
+        )
+
+
+_check_auth_startup()
+
+
+def _timing_safe_key_check(provided: str, allowed_keys: set[str]) -> bool:
+    """Constant-time key comparison to prevent timing attacks."""
+    for key in allowed_keys:
+        if hmac.compare_digest(provided.encode(), key.encode()):
+            return True
+    return False
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     """Bearer-token / API-key auth on all endpoints except /health.
 
-    Reads GTM_API_KEYS from env (comma-separated). If not set, auth is
-    disabled (development mode). Accepts both:
-      Authorization: Bearer <key>
-      X-API-Key: <key>
+    Reads GTM_API_KEYS from env (comma-separated).
+
+    FAIL-CLOSED in production: if APP_ENV=production and GTM_API_KEYS
+    is unset, all authenticated endpoints reject with 503.
+    In development (default): auth disabled when no keys configured.
+
+    Uses hmac.compare_digest for timing-safe key comparison.
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        allowed_keys = os.environ.get("GTM_API_KEYS", "")
-        if not allowed_keys:
-            # Auth disabled — dev mode
-            return await call_next(request)
-
-        keys = {k.strip() for k in allowed_keys.split(",") if k.strip()}
+        allowed_keys_raw = os.environ.get("GTM_API_KEYS", "")
+        app_env = os.environ.get("APP_ENV", "development")
         path = request.url.path
 
-        # Public paths skip auth
+        # Public paths always skip auth
         if path in _PUBLIC_PATHS:
             return await call_next(request)
+
+        if not allowed_keys_raw.strip():
+            if app_env == "production":
+                # FAIL-CLOSED: production without keys rejects everything
+                return error_response(
+                    503, "auth_not_configured",
+                    "Service unavailable: authentication not configured",
+                )
+            # Dev mode — auth disabled
+            return await call_next(request)
+
+        keys = {k.strip() for k in allowed_keys_raw.split(",") if k.strip()}
 
         # Extract key from header
         auth_header = request.headers.get("authorization", "")
@@ -65,7 +110,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         elif api_key_header:
             provided_key = api_key_header.strip()
 
-        if not provided_key or provided_key not in keys:
+        if not provided_key or not _timing_safe_key_check(provided_key, keys):
             return error_response(401, "unauthorized", "Invalid or missing API key")
 
         # Stash key identity for rate limiting

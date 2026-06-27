@@ -22,12 +22,15 @@ def _make_store():
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
         mock_psycopg.connect.return_value = mock_conn
 
+        # Migration version check returns empty (no migrations applied yet)
+        mock_cursor.fetchall.return_value = []
+
         from gtm_triage.trace.pg_store import PostgresTraceStore
         store = PostgresTraceStore("postgresql://test:test@localhost/test")
 
-        # Verify schema creation was called
-        assert mock_cursor.execute.call_count == 4  # events + idx + idempotency + daily_usage
-        mock_conn.commit.assert_called_once()
+        # Verify migration system ran (schema_migrations + migration 001)
+        assert mock_conn.commit.call_count >= 2  # at least: schema_migrations + migration
+        assert mock_cursor.execute.call_count >= 3  # CREATE schema_migrations + SELECT versions + migration SQL
 
         # Reset mocks for test usage
         mock_cursor.reset_mock()
