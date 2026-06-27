@@ -122,17 +122,25 @@ class EnrichLeadTool(BaseTool):
 
         # ── New path: delegate to EnrichmentProvider ─────────────────────
         if self._enrichment_provider is not None:
-            from gtm_triage.enrichment.extraction import extract_lead_signals, extract_lead_signals_llm
+            from gtm_triage.enrichment.signals import (
+                extract_signals_llm,
+                extract_signals_mock,
+                signals_to_extraction_result,
+            )
             result = self._enrichment_provider.enrich(email, name, company, message)
 
-            # Run extraction on the lead's own words
-            # LLM extraction when provider=openai; heuristic otherwise
+            # Run atomic signal extraction on the lead's own words
             if self._provider == "openai":
-                extraction = extract_lead_signals_llm(
+                sig_extraction = extract_signals_llm(
                     name=name, message=message, email=email, model=self._model,
                 )
             else:
-                extraction = extract_lead_signals(name=name, message=message, email=email)
+                sig_extraction = extract_signals_mock(
+                    name=name, message=message, email=email,
+                )
+
+            # Convert to legacy ExtractionResult (attribution-aware)
+            extraction = signals_to_extraction_result(sig_extraction, email=email)
 
             # Merge: extraction seniority wins over enrichment if higher confidence
             if extraction.seniority and extraction.seniority_confidence > result.seniority.confidence:
@@ -151,9 +159,10 @@ class EnrichLeadTool(BaseTool):
                 )
 
             flat = result.to_flat_dict()
-            # Pass intent through for scoring
+            # Pass intent + raw signals through for scoring
             flat["extracted_intent"] = extraction.intent
             flat["extracted_intent_confidence"] = extraction.intent_confidence
+            flat["atomic_signals"] = [s.model_dump() for s in sig_extraction.signals]
             # Add token placeholders for compatibility
             flat["llm_tokens_in"] = 0
             flat["llm_tokens_out"] = 0

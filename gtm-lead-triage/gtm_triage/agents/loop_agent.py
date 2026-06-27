@@ -98,7 +98,11 @@ def _build_user_prompt(lead: Lead, steps: list[LoopStep], pre_signals: dict | No
     if steps:
         lines = ["PRIOR STEPS:"]
         for s in steps:
-            obs_str = json.dumps(s.observation.output)[:400] if s.observation.output else "(empty)"
+            # Strip bulky fields (atomic_signals) from observation for prompt brevity
+            obs_data = s.observation.output
+            if obs_data and "atomic_signals" in obs_data:
+                obs_data = {k: v for k, v in obs_data.items() if k != "atomic_signals"}
+            obs_str = json.dumps(obs_data)[:400] if obs_data else "(empty)"
             if s.observation.error:
                 obs_str = f"ERROR: {s.observation.error}"
             lines.append(
@@ -193,10 +197,11 @@ def _compute_pre_signals(lead: Lead) -> dict:
     """Compute pre-loop signals from the lead's input fields.
 
     These are cheap, deterministic checks that run before any tool calls.
-    They inform the loop's branching decisions.
+    They inform the loop's branching decisions. Uses the atomic signal
+    extractor with attribution-aware conversion.
     """
     from gtm_triage.enrichment.email_signal import check_email
-    from gtm_triage.enrichment.extraction import extract_lead_signals
+    from gtm_triage.enrichment.signals import extract_signals_mock, signals_to_extraction_result
 
     signals: dict = {}
 
@@ -206,10 +211,11 @@ def _compute_pre_signals(lead: Lead) -> dict:
     signals["email_is_free"] = email_signal.is_free
     signals["email_is_disposable"] = email_signal.is_disposable
 
-    # Extraction (seniority + intent from the lead's own words)
-    extraction = extract_lead_signals(
+    # Atomic signal extraction → attribution-aware conversion
+    sig_extraction = extract_signals_mock(
         name=lead.name, message=lead.message, email=lead.email,
     )
+    extraction = signals_to_extraction_result(sig_extraction, email=lead.email)
     signals["extracted_intent"] = extraction.intent
     signals["extracted_intent_confidence"] = extraction.intent_confidence
     signals["extracted_seniority"] = extraction.seniority
