@@ -313,7 +313,8 @@ class TestEndToEnd:
         assert result.enrichment.get("is_customer") is True
 
     def test_dig_deeper_on_low_confidence_enrichment(self):
-        """Low-confidence enrichment (unknown industry+size) → DIG_DEEPER trace."""
+        """Low-confidence enrichment (unknown industry+size) → DIG_DEEPER trace
+        with an EXTRA step (website fallback attempt) before scoring."""
         executor, trace = _make_executor()
         # A lead at an unknown domain where enrichment returns mostly unknown
         lead = Lead(
@@ -330,6 +331,32 @@ class TestEndToEnd:
         tool_sequence = [s.action.tool for s in result.steps if s.action.tool]
         assert "enrich_lead" in tool_sequence
         assert "score_lead" in tool_sequence
+
+        # Verify the extra step was attempted — dig_deeper event in trace
+        events = trace.get_run_events(result.run_id)
+        dig_events = [e for e in events if e.get("event_type") == "dig_deeper"]
+        assert len(dig_events) >= 1, "DIG_DEEPER should record a dig_deeper trace event"
+
+    def test_dig_deeper_skips_free_email(self):
+        """DIG_DEEPER on a free email skips website fallback (no useful domain)."""
+        executor, trace = _make_executor()
+        lead = Lead(
+            email="someone@gmail.com",
+            name="Someone",
+            message="Tell me more.",
+        )
+        result = run_triage(lead, executor, trace, provider="mock")
+
+        assert result.trace_path == "DIG_DEEPER"
+        events = trace.get_run_events(result.run_id)
+        dig_events = [e for e in events if e.get("event_type") == "dig_deeper"]
+        assert len(dig_events) >= 1
+        # Should be skipped (free domain)
+        payload = dig_events[0].get("payload", {})
+        if isinstance(payload, str):
+            import json
+            payload = json.loads(payload)
+        assert payload.get("skipped") is True
 
     def test_clean_full_path(self):
         """Normal lead → full path with all tools."""

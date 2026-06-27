@@ -271,6 +271,93 @@ def _apply_confidence_gate(enrichment_output: dict, pre_signals: dict) -> dict:
     return output
 
 
+def _dig_deeper_enrich(
+    lead: Lead,
+    first_output: dict,
+    run_id: str,
+    trace: TraceStore,
+) -> dict | None:
+    """Attempt a second enrichment source when the first pass left gaps.
+
+    Tries a website-fetch + LLM extraction on the email domain. If it
+    produces new data, merges it into the first output (first pass wins
+    on conflicts). Returns the merged dict, or None if nothing new.
+
+    This is the EXTRA STEP that makes DIG_DEEPER a real branch — the
+    trace shows an additional tool-level action between enrichment and
+    scoring that other paths don't have.
+    """
+    email = lead.email.strip().lower()
+    if "@" not in email:
+        return None
+
+    domain = email.rsplit("@", 1)[1]
+
+    # Skip for free/disposable domains — no useful website to fetch
+    from gtm_triage.enrichment.email_signal import FREE_DOMAINS, DISPOSABLE_DOMAINS
+    if domain in FREE_DOMAINS or domain in DISPOSABLE_DOMAINS:
+        trace.write(
+            run_id=run_id,
+            event_type="dig_deeper",
+            agent="loop_agent",
+            payload={"domain": domain, "skipped": True, "reason": "free_or_disposable_domain"},
+        )
+        return None
+
+    # Attempt website fallback
+    try:
+        from gtm_triage.enrichment.waterfall import WebsiteFallback
+        fallback = WebsiteFallback()
+        website_result = fallback.fetch_and_extract(domain)
+        fallback.close()
+
+        # Check if we got anything new
+        flat = website_result.to_flat_dict() if hasattr(website_result, "to_flat_dict") else {}
+        new_industry = flat.get("industry", "unknown")
+        new_size = flat.get("company_size", "unknown")
+
+        got_new_data = (new_industry != "unknown") or (new_size != "unknown")
+
+        trace.write(
+            run_id=run_id,
+            event_type="dig_deeper",
+            agent="loop_agent",
+            payload={
+                "domain": domain,
+                "skipped": False,
+                "got_new_data": got_new_data,
+                "website_industry": new_industry,
+                "website_company_size": new_size,
+            },
+        )
+
+        if got_new_data:
+            # Merge: website fills gaps, first-pass data wins on conflicts
+            merged = dict(first_output)
+            if merged.get("industry", "unknown") == "unknown" and new_industry != "unknown":
+                merged["industry"] = new_industry
+                fs = merged.get("field_sources", {})
+                fs["industry"] = "website"
+                merged["field_sources"] = fs
+            if merged.get("company_size", "unknown") == "unknown" and new_size != "unknown":
+                merged["company_size"] = new_size
+                fs = merged.get("field_sources", {})
+                fs["company_size"] = "website"
+                merged["field_sources"] = fs
+            return merged
+
+    except Exception as exc:
+        logger.debug("DIG_DEEPER website fallback failed for %s: %s", domain, exc)
+        trace.write(
+            run_id=run_id,
+            event_type="dig_deeper",
+            agent="loop_agent",
+            payload={"domain": domain, "skipped": False, "error": str(exc)},
+        )
+
+    return None
+
+
 def run_triage(
     lead: Lead,
     executor: Executor,
@@ -414,14 +501,20 @@ def run_triage(
                     trace_path = "LOW_CONFIDENCE_GATE"
 
                 # DIG_DEEPER: enrichment returned but key fields are missing.
-                # When BOTH industry and company_size are unknown, the scoring
-                # rules have almost nothing to work with — flag for deeper
-                # investigation (website second-pass, manual review, etc.).
+                # When BOTH industry and company_size are unknown, take an
+                # EXTRA STEP — attempt a second enrichment source (website
+                # fetch + LLM read) before proceeding to scoring.
                 industry_val = output.get("industry", "unknown")
                 size_val = output.get("company_size", "unknown")
                 if industry_val == "unknown" and size_val == "unknown":
                     if trace_path == "CLEAN_FULL_PATH":
                         trace_path = "DIG_DEEPER"
+
+                    # Attempt website-fallback enrichment as a second source
+                    second_output = _dig_deeper_enrich(lead, output, run_id, trace)
+                    if second_output is not None:
+                        output = second_output
+                        result.enrichment = output
 
             obs = Observation(output=output, error=error)
 
