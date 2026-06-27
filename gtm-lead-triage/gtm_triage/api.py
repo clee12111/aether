@@ -3,7 +3,7 @@
 Endpoints:
   POST /triage            — triage a lead; returns TriageResult JSON.
   POST /deliver           — record a routing outcome as a CRM activity.
-  GET  /health            — liveness check.
+  GET  /health            — liveness check (public, no auth).
   GET  /leads             — list recently triaged contacts.
   GET  /runs              — list recent run summaries.
   GET  /runs/{run_id}     — trace rows for a given run.
@@ -23,18 +23,23 @@ Config via environment variables:
   FRONTEND_ORIGIN    — comma-separated allowed CORS origins (default "http://localhost:3000")
   OPENAI_API_KEY     — required when GTM_PROVIDER=openai
   HUBSPOT_TOKEN      — required when CRM_BACKEND=hubspot
+  GTM_API_KEYS       — comma-separated API keys for auth (if unset, auth disabled)
+  GTM_RATE_LIMIT_RPM — requests per minute per key/IP (default 60)
 """
 
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger(__name__)
 
 from gtm_triage.agents.executor import Executor
 from gtm_triage.agents.loop_agent import run_triage
@@ -52,27 +57,56 @@ from gtm_triage.trace.store import TraceStore
 
 # ── Request/response models ─────────────────────────────────────────────────
 
+_MAX_FIELD_LEN = 1000
+_MAX_MESSAGE_LEN = 10000
+
+
 class TriageRequest(BaseModel):
-    email: str = Field(..., description="Contact email address")
-    name: str = Field(default="", description="Contact name")
-    company: str = Field(default="", description="Company name")
-    message: str = Field(default="", description="Inbound message or form submission text")
-    source: str = Field(default="inbound_form", description="Lead source channel")
+    email: str = Field(..., description="Contact email address", max_length=320)
+    name: str = Field(default="", description="Contact name", max_length=_MAX_FIELD_LEN)
+    company: str = Field(default="", description="Company name", max_length=_MAX_FIELD_LEN)
+    message: str = Field(default="", description="Inbound message or form submission text", max_length=_MAX_MESSAGE_LEN)
+    source: str = Field(default="inbound_form", description="Lead source channel", max_length=100)
     idempotency_key: str | None = Field(
         default=None,
         description="Optional idempotency key. If omitted, derived from hash(email+message+source).",
+        max_length=128,
     )
+
+    @field_validator("email")
+    @classmethod
+    def email_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("email must not be empty")
+        return v.strip()
+
+    @field_validator("tier", check_fields=False)
+    @classmethod
+    def tier_valid(cls, v: str) -> str:
+        allowed = {"hot", "warm", "cold", "disqualified"}
+        if v not in allowed:
+            raise ValueError(f"tier must be one of {allowed}")
+        return v
 
 
 class DeliverRequest(BaseModel):
-    email: str = Field(..., description="Contact email")
-    run_id: str = Field(..., description="Run ID from the triage step")
+    email: str = Field(..., description="Contact email", max_length=320)
+    run_id: str = Field(..., description="Run ID from the triage step", max_length=64)
     tier: str = Field(..., description="Tier from triage (hot/warm/cold/disqualified)")
-    route: str = Field(..., description="Route from triage")
+    route: str = Field(..., description="Route from triage", max_length=50)
     action: str = Field(
         default="",
         description="Delivery action taken (e.g. 'notified AE', 'added to nurture')",
+        max_length=_MAX_FIELD_LEN,
     )
+
+    @field_validator("tier")
+    @classmethod
+    def tier_valid(cls, v: str) -> str:
+        allowed = {"hot", "warm", "cold", "disqualified"}
+        if v not in allowed:
+            raise ValueError(f"tier must be one of {allowed}")
+        return v
 
 
 class DeliverResponse(BaseModel):
@@ -153,8 +187,16 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(
     title="GTM Lead-Triage Agent",
-    version="0.6.0",
+    version="0.7.0",
     lifespan=_lifespan,
+)
+
+# ── Middleware stack (order matters: outermost first) ─────────────────────────
+from gtm_triage.middleware import (
+    AuthMiddleware,
+    RateLimitMiddleware,
+    RequestSizeLimitMiddleware,
+    global_exception_handler,
 )
 
 # CORS — allow the frontend origin (configurable, default localhost:3000)
@@ -168,6 +210,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Auth → rate limit → size limit (inside-out execution order)
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(AuthMiddleware)
+
+# Global exception handler — no stack leaks
+app.add_exception_handler(Exception, global_exception_handler)
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────

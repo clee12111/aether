@@ -293,7 +293,7 @@ def extract_signals_llm(
 
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, timeout=30.0)
         resp = client.chat.completions.create(
             model=model,
             messages=[

@@ -212,7 +212,7 @@ def chat(
         from openai import OpenAI
         import os
 
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""), timeout=30.0)
         resp = client.chat.completions.create(
             model=model,
             messages=[

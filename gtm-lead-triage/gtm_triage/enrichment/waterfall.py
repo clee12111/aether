@@ -107,7 +107,7 @@ class WebsiteFallback:
             from openai import OpenAI
             import json
 
-            client = OpenAI(api_key=api_key)
+            client = OpenAI(api_key=api_key, timeout=30.0)
             resp = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
