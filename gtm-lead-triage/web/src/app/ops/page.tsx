@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiDelete } from "@/lib/api";
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -200,6 +200,7 @@ export default function OpsDashboard() {
   const [sortBy, setSortBy] = useState<SortKey>("score");
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [copied, setCopied] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -240,6 +241,21 @@ export default function OpsDashboard() {
       next.has(i) ? next.delete(i) : next.add(i);
       return next;
     });
+  }
+
+  async function deleteLead(email: string) {
+    if (!confirm(`Delete ${email} and all their trace data?`)) return;
+    setDeleting(true);
+    try {
+      await apiDelete(`/contacts/${encodeURIComponent(email)}`);
+      setSelectedEmail("");
+      setSelectedRun(null);
+      setLeads((prev) => prev.filter((l) => l.email !== email));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function copyDraft(text: string) {
@@ -408,11 +424,21 @@ export default function OpsDashboard() {
                     <h2 className="text-lg font-semibold tracking-tight text-zinc-900">{selectedLead.name || selectedEmail}</h2>
                     <p className="text-xs text-zinc-400 mt-0.5">{selectedEmail}{selectedLead.company ? ` · ${selectedLead.company}` : ""}</p>
                   </div>
-                  {selectedLead.tier && (
-                    <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${TIER_BADGE[selectedLead.tier] || ""}`}>
-                      {selectedLead.tier} / {ROUTE_LABEL[selectedLead.route || ""] || selectedLead.route}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {selectedLead.tier && (
+                      <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${TIER_BADGE[selectedLead.tier] || ""}`}>
+                        {selectedLead.tier} / {ROUTE_LABEL[selectedLead.route || ""] || selectedLead.route}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => deleteLead(selectedEmail)}
+                      disabled={deleting}
+                      className="text-[10px] font-medium text-zinc-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                      title="Delete contact + trace data"
+                    >
+                      {deleting ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Stats bar */}

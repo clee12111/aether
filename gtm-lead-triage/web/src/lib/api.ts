@@ -44,6 +44,12 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetchWithTimeout(`${API}${path}`, { method: "DELETE", headers: defaultHeaders });
+  if (!res.ok) throw new Error(friendlyError(res.status, `${res.status} ${res.statusText}`));
+  return res.json();
+}
+
 /** Fire-and-forget warmup ping — wakes Render from cold sleep. */
 export function warmup(): void {
   fetch(`${API}/ready`).catch(() => {});
