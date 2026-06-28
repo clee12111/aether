@@ -571,3 +571,33 @@ which silently fails with a network error after the browser's TCP timeout.
 
 ### Final state
 - **461 tests green**, frontend build clean
+
+## 2026-06-28 — Disable auth for public demo
+
+### Decision
+Auth is DISABLED for the public demo. Protection is via daily cap (200/day,
+falls back to mock provider when exceeded) + rate limit (60 RPM per IP).
+
+**Why:** The fail-closed auth (`APP_ENV=production` + `GTM_API_KEYS`) caused
+503 on every request from the frontend. The demo key approach required both
+Render and Vercel env vars to match AND a Vercel redeploy to bake the key
+into the JS bundle — too many moving parts for a portfolio demo that only
+triages synthetic leads and never sends real email.
+
+### Changes
+- `render.yaml`: `APP_ENV=demo` (was `production`). Removed `GTM_API_KEYS`.
+  Auth middleware sees non-production env + no keys → auth disabled.
+- `web/src/lib/api.ts`: removed API key logic. No `X-API-Key` header sent.
+  Kept: 60s timeout, warmup ping, progressive loading messages, console log.
+- `test_cors_on_triage_non_200`: verifies CORS headers on validation errors
+  from /triage (the "Failed to fetch" regression guard).
+
+### Abuse protection (still active)
+- **Daily cap:** 200 OpenAI calls/day (default `DAILY_QUERY_CAP`). After 200,
+  falls back to mock provider (free, instant). Configurable via env var.
+- **Rate limit:** 60 RPM per IP (default `GTM_RATE_LIMIT_RPM`). Returns 429.
+- **Request size:** 64 KB body limit. Field length caps (email 320, message 10K).
+- **CORS:** locked to `FRONTEND_ORIGIN` (no wildcard).
+
+### Final state
+- **462 tests green**, frontend build clean

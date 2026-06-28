@@ -272,3 +272,25 @@ class TestCORS:
             )
             assert resp.status_code == 200
             assert resp.headers.get("access-control-allow-origin") == origin
+
+    def test_cors_on_triage_non_200(self):
+        """Any non-200 from /triage must carry CORS headers so the browser
+        can read the error body instead of showing 'Failed to fetch'."""
+        import os
+        from starlette.testclient import TestClient
+        from gtm_triage.api import app
+
+        origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000").split(",")[0].strip()
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            # Send an invalid body to trigger a 422 (validation error)
+            resp = client.post(
+                "/triage",
+                json={},  # missing required fields
+                headers={"Origin": origin, "Content-Type": "application/json"},
+            )
+            # We don't care what status it is — just that CORS is present
+            assert resp.status_code >= 400
+            assert "access-control-allow-origin" in resp.headers, (
+                f"CORS header missing on {resp.status_code} from /triage"
+            )

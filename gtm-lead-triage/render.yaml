@@ -8,11 +8,9 @@ services:
     plan: free
     envVars:
       - key: APP_ENV
-        value: production
+        value: demo
       - key: GTM_PROVIDER
         value: openai
-      - key: GTM_API_KEYS
-        sync: false
       - key: CRM_BACKEND
         value: sqlite
       - key: ENRICHMENT_PROVIDER
