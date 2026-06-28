@@ -258,7 +258,7 @@ class ScoreLeadTool(BaseTool):
         # to a scoring LLM.
         injection_flagged = bool(enrichment.get("injection_flagged"))
 
-        # LLM adjustment (openai provider only, skipped if injection flagged)
+        # LLM adjustment (any non-mock provider, skipped if injection flagged)
         llm_adjustment = 0
         llm_reason = ""
         llm_tokens_in = 0
@@ -267,12 +267,12 @@ class ScoreLeadTool(BaseTool):
         if injection_flagged:
             llm_reason = "skipped: injection_flagged"
             logger.info("Skipping LLM adjustment for %s: injection_flagged", email)
-        elif self._provider == "openai":
+        elif self._provider != "mock":
             from gtm_triage.agents.llm_client import infer_score_adjustment
             llm_adjustment, llm_reason, llm_tokens_in, llm_tokens_out = infer_score_adjustment(
                 email=email, name=name, company=company, message=message,
                 enrichment=enrichment, rule_points=rule_points, rule_tier=rule_tier,
-                model=self._model, run_id=run_id,
+                model=self._model, run_id=run_id, provider=self._provider,
             )
         else:
             adj = args.get("llm_adjustment", 0)

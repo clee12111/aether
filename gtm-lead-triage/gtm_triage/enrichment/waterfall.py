@@ -45,9 +45,16 @@ class WebsiteFallback:
     In offline/CI mode (no OPENAI_API_KEY), returns empty result.
     """
 
-    def __init__(self, http_client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        http_client: httpx.Client | None = None,
+        llm_provider: str = "openai",
+        llm_model: str = "gpt-4o-mini",
+    ) -> None:
         self._client = http_client
         self._owns_client = http_client is None
+        self._llm_provider = llm_provider
+        self._llm_model = llm_model
 
     def _get_client(self) -> httpx.Client:
         if self._client is None:
@@ -105,40 +112,29 @@ class WebsiteFallback:
 
     def _llm_extract(self, domain: str, text: str) -> EnrichmentResult:
         """Call LLM to extract industry and company size from website text."""
-        api_key = os.environ.get("OPENAI_API_KEY", "")
-        if not api_key:
-            return EnrichmentResult(email="")
+        system = (
+            "Extract company information from website text. "
+            "Return ONLY valid JSON with these fields:\n"
+            '{"industry": "...", "company_size": "smb|mid_market|enterprise|unknown", '
+            '"company_name": "..."}\n'
+            "For industry use: financial_services, healthcare, technology, "
+            "consulting, retail, education, or the most specific term. "
+            "For company_size, infer from signals like team size mentions, "
+            "office count, client scale. If unsure, use unknown."
+        )
+        user_text = f"Website domain: {domain}\n\nContent:\n{text[:3000]}"
 
         try:
-            from openai import OpenAI
             import json
-
-            client = OpenAI(api_key=api_key, timeout=30.0)
-            resp = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Extract company information from website text. "
-                            "Return ONLY valid JSON with these fields:\n"
-                            '{"industry": "...", "company_size": "smb|mid_market|enterprise|unknown", '
-                            '"company_name": "..."}\n'
-                            "For industry use: financial_services, healthcare, technology, "
-                            "consulting, retail, education, or the most specific term. "
-                            "For company_size, infer from signals like team size mentions, "
-                            "office count, client scale. If unsure, use unknown."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Website domain: {domain}\n\nContent:\n{text[:3000]}",
-                    },
-                ],
-                max_completion_tokens=150,
-                temperature=0,
+            from gtm_triage.agents.llm_client import chat
+            result = chat(
+                provider=self._llm_provider,
+                model=self._llm_model,
+                system=system,
+                user=user_text,
+                max_tokens=150,
             )
-            raw = resp.choices[0].message.content or ""
+            raw = result.text
             m = re.search(r"\{[\s\S]*\}", raw)
             if m:
                 data = json.loads(m.group(0))

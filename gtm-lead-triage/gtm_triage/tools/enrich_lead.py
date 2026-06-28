@@ -133,29 +133,23 @@ class EnrichLeadTool(BaseTool):
             result = self._enrichment_provider.enrich(email, name, company, message)
 
             # Run extraction — A (Phase E flat) or B (Phase E.2 atomic signals)
+            # Provider is passed through so any LLM backend works (openai/anthropic/mock).
             if self._extractor == "A":
-                from gtm_triage.enrichment.extraction import extract_lead_signals, extract_lead_signals_llm
-                if self._provider == "openai":
-                    extraction = extract_lead_signals_llm(
-                        name=name, message=message, email=email, model=self._model,
-                    )
-                else:
-                    extraction = extract_lead_signals(name=name, message=message, email=email)
+                from gtm_triage.enrichment.extraction import extract_lead_signals_llm
+                extraction = extract_lead_signals_llm(
+                    name=name, message=message, email=email,
+                    model=self._model, provider=self._provider,
+                )
                 sig_extraction = None  # no atomic signals in A path
             else:
                 from gtm_triage.enrichment.signals import (
                     extract_signals_llm,
-                    extract_signals_mock,
                     signals_to_extraction_result,
                 )
-                if self._provider == "openai":
-                    sig_extraction = extract_signals_llm(
-                        name=name, message=message, email=email, model=self._model,
-                    )
-                else:
-                    sig_extraction = extract_signals_mock(
-                        name=name, message=message, email=email,
-                    )
+                sig_extraction = extract_signals_llm(
+                    name=name, message=message, email=email,
+                    model=self._model, provider=self._provider,
+                )
                 extraction = signals_to_extraction_result(sig_extraction, email=email)
 
             # Merge: extraction seniority wins over enrichment if higher confidence
@@ -203,17 +197,17 @@ class EnrichLeadTool(BaseTool):
             "seniority": "regex" if seniority != "unknown" else "unknown",
         }
 
-        # LLM fallback for unknown fields (openai provider only)
+        # LLM fallback for unknown fields (any non-mock provider)
         llm_tokens_in = 0
         llm_tokens_out = 0
-        if self._provider == "openai":
+        if self._provider != "mock":
             unknown_fields = [f for f in ("industry", "company_size", "seniority") if sources[f] == "unknown"]
             if unknown_fields:
                 from gtm_triage.agents.llm_client import infer_enrichment
                 inferred, llm_tokens_in, llm_tokens_out = infer_enrichment(
                     email=email, name=name, company=company, message=message,
                     unknown_fields=unknown_fields, model=self._model,
-                    run_id=run_id,
+                    run_id=run_id, provider=self._provider,
                 )
                 if inferred:
                     if "industry" in unknown_fields and inferred.get("industry", "unknown") != "unknown":

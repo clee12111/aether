@@ -271,13 +271,13 @@ def extract_signals_llm(
     message: str = "",
     email: str = "",
     model: str = "gpt-4o-mini",
+    provider: str = "openai",
 ) -> SignalExtraction:
     """Extract atomic signals via LLM structured output.
 
     Falls back to mock on failure.
     """
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
+    if provider == "mock":
         return extract_signals_mock(name=name, message=message, email=email)
 
     text_block = ""
@@ -292,18 +292,12 @@ def extract_signals_llm(
         return SignalExtraction(signals=[])
 
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key, timeout=30.0)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _LLM_SYSTEM},
-                {"role": "user", "content": text_block},
-            ],
-            max_completion_tokens=500,
-            temperature=0,
+        from gtm_triage.agents.llm_client import chat
+        result = chat(
+            provider=provider, model=model,
+            system=_LLM_SYSTEM, user=text_block, max_tokens=500,
         )
-        raw = resp.choices[0].message.content or ""
+        raw = result.text
         m = re.search(r"\{[\s\S]*\}", raw)
         if m:
             data = json.loads(m.group(0))

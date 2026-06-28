@@ -655,3 +655,41 @@ invisible to the frontend.
 
 ### Final state
 - **470 tests green** (462 + 8 new list_contacts/ABC tests)
+
+## 2026-06-28 — Phase N2: LLMProvider abstraction + HubSpot delete_contact
+
+### LLMProvider ABC (`agents/llm_provider.py`)
+- `LLMProvider` ABC with `chat(messages, model, temperature, ...) -> ChatResult`.
+- Implementations: `OpenAIProvider`, `MockProvider`, `AnthropicProvider` (real
+  — uses Anthropic SDK with system param extraction).
+- Factory: `create_provider("openai" | "anthropic" | "mock")`.
+- All LLM calls route through `chat()` → `LLMProvider.chat()`. Zero direct
+  vendor SDK imports outside `llm_provider.py` (enforced by AST scan test).
+
+### Call sites refactored
+- `extraction.py`: `from openai import OpenAI` → `from llm_client import chat`
+- `signals.py`: same
+- `waterfall.py`: same + accepts `llm_provider`/`llm_model` params
+- `enrich_lead.py`: `self._provider == "openai"` → `self._provider != "mock"`
+- `score_lead.py`: same
+- `llm_client.py:infer_enrichment/infer_score_adjustment`: accept `provider`
+  param, pass through to `chat()`
+- `api.py`: over-cap logic generalized from `== "openai"` to `!= "mock"`
+
+### Model cascade
+`GTM_MODEL` now propagates from `api.py` through tools to enrichment
+extractors. `waterfall.py` no longer hardcodes `"gpt-4o-mini"`.
+
+### HubSpot delete_contact
+`HubSpotCRM.delete_contact()` implemented via HubSpot v3 archive endpoint
+(`DELETE /crm/v3/objects/contacts/{id}`). COMPLIANCE.md right-to-erasure
+path now works on the real CRM.
+
+### Swap test result
+To add Anthropic: `pip install anthropic` + set `GTM_PROVIDER=anthropic`
++ set `ANTHROPIC_API_KEY`. Zero other file changes. Downgraded from
+"HIGH friction (8+ files)" to **one adapter + one env var**.
+
+### Final state
+- **480 tests green** (470 + 10 LLM provider tests)
+- Mock eval gate: 5/5

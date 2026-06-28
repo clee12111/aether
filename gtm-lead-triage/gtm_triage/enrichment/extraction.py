@@ -265,6 +265,7 @@ def extract_lead_signals_llm(
     message: str = "",
     email: str = "",
     model: str = "gpt-4o-mini",
+    provider: str = "openai",
 ) -> ExtractionResult:
     """Extract seniority, role, intent via LLM structured output.
 
@@ -273,10 +274,8 @@ def extract_lead_signals_llm(
     Falls back to the heuristic path on any failure.
     """
     import json as _json
-    import os
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
+    if provider == "mock":
         return extract_lead_signals(name=name, message=message, email=email)
 
     text_block = ""
@@ -311,18 +310,12 @@ def extract_lead_signals_llm(
     )
 
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key, timeout=30.0)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": text_block},
-            ],
-            max_completion_tokens=200,
-            temperature=0,
+        from gtm_triage.agents.llm_client import chat
+        result = chat(
+            provider=provider, model=model,
+            system=system, user=text_block, max_tokens=200,
         )
-        raw = resp.choices[0].message.content or ""
+        raw = result.text
         m = re.search(r"\{[\s\S]*\}", raw)
         if m:
             data = _json.loads(m.group(0))

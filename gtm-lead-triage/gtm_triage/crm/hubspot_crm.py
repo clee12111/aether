@@ -154,6 +154,18 @@ class HubSpotCRM(CRMStore):
         activities.reverse()
         return [{"activity": a} for a in activities]
 
+    def delete_contact(self, email: str) -> bool:
+        """Archive a HubSpot contact by email (right-to-erasure)."""
+        contact = self._search_by_email(email)
+        if contact is None:
+            return False
+        cid = contact["id"]
+        resp = self._client.delete(f"/crm/v3/objects/contacts/{cid}")
+        if not resp.is_success:
+            logger.warning("HubSpot DELETE /contacts/%s failed: %d %s", cid, resp.status_code, resp.text)
+            return False
+        return True
+
     def list_contacts(self, limit: int = 50) -> list[dict[str, Any]]:
         """List recently modified contacts that have a gtm_tier set."""
         body = {

@@ -271,7 +271,7 @@ app.add_exception_handler(Exception, global_exception_handler)
 @app.get("/config")
 def get_config() -> dict[str, Any]:
     used = _trace.get_daily_usage() if _trace else 0
-    can_use_openai = _provider == "openai" and bool(os.environ.get("OPENAI_API_KEY", ""))
+    can_use_openai = _provider != "mock"
     return {
         "provider": _provider,
         "model": _model,
@@ -407,15 +407,12 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         return prior["result"]
     _metrics.cache_miss_total.inc()
 
-    # Daily cap: if provider is openai but over the cap, fall back to mock
+    # Daily cap: if using a real LLM provider, fall back to mock when over cap
     effective_provider = _provider
-    has_openai_key = bool(os.environ.get("OPENAI_API_KEY", ""))
-    if effective_provider == "openai" and has_openai_key:
+    if effective_provider != "mock":
         used = _trace.get_daily_usage()
         if used >= _daily_cap:
             effective_provider = "mock"
-    elif effective_provider == "openai" and not has_openai_key:
-        effective_provider = "mock"
 
     # Build executor with the effective provider (may differ from _provider)
     if effective_provider != _provider:
@@ -454,8 +451,8 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         provider=effective_provider,
     )
 
-    # Increment daily usage only for real openai runs
-    if effective_provider == "openai":
+    # Increment daily usage only for real LLM runs (not mock)
+    if effective_provider != "mock":
         _trace.increment_daily_usage()
 
     crm_data: dict[str, Any] = {

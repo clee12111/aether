@@ -1,11 +1,10 @@
 """Provider-swappable chat shim for the GTM triage agent.
 
-Providers:
-  - "mock": deterministic responses for CI/eval — no API key needed.
-  - "openai": real OpenAI API calls (gpt-4o-mini default).
+All LLM calls route through the LLMProvider abstraction. Call sites use
+chat() which delegates to the injected provider. No file imports a vendor
+SDK directly.
 
-Phase 1.5: added infer_enrichment() and infer_score_adjustment() helpers
-for bounded LLM tasks within tools.
+Phase N2: refactored to LLMProvider ABC (agents/llm_provider.py).
 """
 
 from __future__ import annotations
@@ -13,16 +12,13 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+
+from gtm_triage.agents.llm_provider import ChatResult, LLMProvider, create_provider
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class ChatResult:
-    text: str
-    input_tokens: int
-    output_tokens: int
+# Re-export ChatResult for backward compatibility
+__all__ = ["ChatResult", "chat", "infer_enrichment", "infer_score_adjustment"]
 
 
 # ── Mock provider ────────────────────────────────────────────────────────────
@@ -188,6 +184,18 @@ def _mock_response(system: str, user: str) -> str:
     })
 
 
+# ── Provider instance cache ─────────────────────────────────────────────────
+# Created lazily per provider name, reused across calls.
+
+_providers: dict[str, LLMProvider] = {}
+
+
+def _get_provider(provider_name: str) -> LLMProvider:
+    if provider_name not in _providers:
+        _providers[provider_name] = create_provider(provider_name)
+    return _providers[provider_name]
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 def chat(
@@ -204,33 +212,16 @@ def chat(
 
     t0 = _time.time()
 
-    if provider == "mock":
-        text = _mock_response(system, user)
-        result = ChatResult(text=text, input_tokens=0, output_tokens=0)
-
-    elif provider == "openai":
-        from openai import OpenAI
-        import os
-
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""), timeout=30.0)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            max_completion_tokens=max_tokens,
-            temperature=0,
-        )
-        usage = resp.usage
-        result = ChatResult(
-            text=resp.choices[0].message.content or "",
-            input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
-            output_tokens=getattr(usage, "completion_tokens", 0) or 0,
-        )
-
-    else:
-        raise ValueError(f"Unknown provider: {provider!r}")
+    llm = _get_provider(provider)
+    result = llm.chat(
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        model=model,
+        max_tokens=max_tokens,
+        temperature=0,
+    )
 
     # Langfuse: record generation if active and run_id provided
     if run_id:
@@ -285,6 +276,7 @@ def infer_enrichment(
     unknown_fields: list[str],
     model: str = "gpt-4o-mini",
     run_id: str = "",
+    provider: str = "openai",
 ) -> tuple[dict, int, int]:
     """Call the LLM to infer unknown enrichment fields.
 
@@ -297,7 +289,7 @@ def infer_enrichment(
         unknown_fields=fields_desc,
     )
     result = chat(
-        provider="openai", model=model,
+        provider=provider, model=model,
         system=_ENRICH_SYSTEM, user=user_prompt, max_tokens=256,
         run_id=run_id, generation_name="enrich-llm-fallback",
     )
@@ -352,6 +344,7 @@ def infer_score_adjustment(
     rule_tier: str,
     model: str = "gpt-4o-mini",
     run_id: str = "",
+    provider: str = "openai",
 ) -> tuple[int, str, int, int]:
     """Call the LLM to propose a bounded score adjustment.
 
@@ -367,7 +360,7 @@ def infer_score_adjustment(
         rule_points=rule_points, rule_tier=rule_tier,
     )
     result = chat(
-        provider="openai", model=model,
+        provider=provider, model=model,
         system=_SCORE_SYSTEM, user=user_prompt, max_tokens=128,
         run_id=run_id, generation_name="score-llm-adjustment",
     )

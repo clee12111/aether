@@ -137,7 +137,11 @@ Everything else (enrichment, CRM, scoring, trace, eval harness structure) is reu
 | Model defaults | 8 files hardcode `"gpt-4o-mini"` |
 | Cost estimation | `store.py:127`, `pg_store.py:197` |
 
-**Friction: HIGH.** No `LLMProvider` abstraction exists. The `chat()` function in `llm_client.py` is the closest thing, but enrichment extractors bypass it and instantiate `openai.OpenAI()` directly. To make this clean: extract an `LLMProvider` interface, route all calls through `chat()`, cascade `GTM_MODEL` to all call sites.
+**Friction: LOW (fixed in Phase N2).** `LLMProvider` ABC with
+`OpenAIProvider`, `MockProvider`, `AnthropicProvider`. All calls route through
+`chat()` → `LLMProvider.chat()`. Zero direct vendor SDK imports outside
+`llm_provider.py`. Swap: `pip install anthropic` + `GTM_PROVIDER=anthropic` +
+`ANTHROPIC_API_KEY`. One adapter + one env var.
 
 ---
 
@@ -145,11 +149,11 @@ Everything else (enrichment, CRM, scoring, trace, eval harness structure) is reu
 
 | Priority | Item | Effort |
 |----------|------|--------|
-| 1 | Extract `LLMProvider` interface — all LLM calls through one adapter | Medium |
-| 2 | Cascade `GTM_MODEL` to enrichment extractors (waterfall, extraction, signals) | Low |
+| ~~1~~ | ~~Extract `LLMProvider` interface~~ | **DONE (Phase N2)** |
+| ~~2~~ | ~~Cascade `GTM_MODEL` to enrichment extractors~~ | **DONE (Phase N2)** |
 | 3 | Add `close()` to EnrichmentProvider ABC | Trivial |
 | 4 | Make tier thresholds configurable (env var or config file) | Low |
-| 5 | Add `delete_contact()` to HubSpotCRM | Low |
+| ~~5~~ | ~~Add `delete_contact()` to HubSpotCRM~~ | **DONE (Phase N2)** |
 | 6 | Make cost estimation pricing configurable per provider | Trivial |
 
 ---
