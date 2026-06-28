@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
-  --foreground: #18181b;
-  --surface: #ffffff;
-  --border: #e4e4e7;
-  --muted: #71717a;
+  --background: #faf8f5;
+  --foreground: #1c1917;
+  --surface: #fffcf9;
+  --border: #e7e0d8;
+  --muted: #78716c;
   --accent: #4f46e5;
   --accent-hover: #4338ca;
 }
@@ -30,7 +30,7 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #e4e4e7 25%, #f4f4f5 50%, #e4e4e7 75%);
+  background: linear-gradient(90deg, #e7e0d8 25%, #f5f0ea 50%, #e7e0d8 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 8px;

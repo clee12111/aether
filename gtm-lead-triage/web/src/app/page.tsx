@@ -133,18 +133,18 @@ export default function LeadForm() {
   }
 
   const inputClass =
-    "w-full px-3.5 py-2.5 bg-white border border-zinc-200 rounded-lg text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-colors";
+    "w-full px-3.5 py-2.5 bg-[var(--surface)] border border-stone-200 rounded-lg text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-colors";
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
-      <header className="border-b border-zinc-200 bg-white px-6 py-3.5 flex items-center justify-between shrink-0">
+      <header className="border-b border-stone-200 bg-[var(--surface)] px-6 py-3.5 flex items-center justify-between shrink-0">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-zinc-900 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-stone-900 flex items-center justify-center">
             <span className="text-white font-bold text-xs">A</span>
           </div>
-          <span className="font-semibold text-sm text-zinc-900">Aether GTM</span>
+          <span className="font-semibold text-sm text-stone-900">Aether GTM</span>
         </Link>
-        <Link href="/ops" className="text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors">
+        <Link href="/ops" className="text-xs font-medium text-stone-500 hover:text-stone-900 transition-colors">
           Ops Dashboard
         </Link>
       </header>
@@ -153,16 +153,16 @@ export default function LeadForm() {
         <div className="w-full max-w-md">
           {!result ? (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 mb-1">
+              <h1 className="text-2xl font-semibold tracking-tight text-stone-900 mb-1">
                 Get in touch
               </h1>
-              <p className="text-sm text-zinc-500 leading-relaxed mb-6 max-w-[50ch]">
+              <p className="text-sm text-stone-500 leading-relaxed mb-6 max-w-[50ch]">
                 Tell us about your needs and we&apos;ll route you to the right team.
               </p>
 
               {/* Presets */}
               <div className="mb-6">
-                <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide mb-2">Try an example</p>
+                <p className="text-[10px] font-medium text-stone-400 uppercase tracking-wide mb-2">Try an example</p>
                 <div className="flex flex-wrap gap-1.5">
                   {PRESETS.map((p) => (
                     <button
@@ -179,19 +179,19 @@ export default function LeadForm() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">Name</label>
+                  <label className="block text-xs font-medium text-stone-700 mb-1.5">Name</label>
                   <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Julia Martinez, VP of Sales" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">Work email</label>
+                  <label className="block text-xs font-medium text-stone-700 mb-1.5">Work email</label>
                   <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} placeholder="julia@acmecorp.com" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">Company <span className="text-zinc-400 font-normal">(optional)</span></label>
+                  <label className="block text-xs font-medium text-stone-700 mb-1.5">Company <span className="text-stone-400 font-normal">(optional)</span></label>
                   <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className={inputClass} placeholder="Acme Corp" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">Message</label>
+                  <label className="block text-xs font-medium text-stone-700 mb-1.5">Message</label>
                   <textarea required rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} className={`${inputClass} resize-none`} placeholder="We'd like to schedule a demo for our team..." />
                 </div>
 
@@ -222,15 +222,15 @@ export default function LeadForm() {
                 {result.score && <span className="opacity-60 font-mono">{result.score.points} pts</span>}
               </div>
 
-              <h2 className="text-xl font-semibold tracking-tight text-zinc-900 mb-2">
+              <h2 className="text-xl font-semibold tracking-tight text-stone-900 mb-2">
                 {ROUTE_LABELS[result.final_route]?.heading || "Request received"}
               </h2>
-              <p className="text-sm text-zinc-500 leading-relaxed mb-8 max-w-[45ch] mx-auto">
+              <p className="text-sm text-stone-500 leading-relaxed mb-8 max-w-[45ch] mx-auto">
                 {ROUTE_LABELS[result.final_route]?.detail || "Your request has been routed to the appropriate team."}
               </p>
 
               {result.score?.reason && (
-                <p className="text-xs text-zinc-400 font-mono mb-8 max-w-[50ch] mx-auto leading-relaxed">
+                <p className="text-xs text-stone-400 font-mono mb-8 max-w-[50ch] mx-auto leading-relaxed">
                   {result.score.reason}
                 </p>
               )}
