@@ -601,3 +601,24 @@ triages synthetic leads and never sends real email.
 
 ### Final state
 - **462 tests green**, frontend build clean
+
+## 2026-06-28 — CRM upsert crash guard (R4)
+
+### Bug
+Triage completed successfully (OpenAI returned a result) but then crashed at
+`api.py:447` on `_crm.upsert()` → HubSpot returned 400 Bad Request →
+`raise_for_status()` threw → unhandled exception → 500 to the user. The
+triage result was lost even though the pipeline succeeded.
+
+Cause: Render dashboard had `CRM_BACKEND=hubspot` (stale) while `render.yaml`
+says `sqlite`. The HubSpot token was invalid or the contact properties weren't
+set up.
+
+### Fix
+- `api.py:447`: wrapped `_crm.upsert()` in try/except — CRM write failures
+  are logged but don't crash the triage response. The user gets their result.
+- Render dashboard: `CRM_BACKEND` must be changed to `sqlite` to match
+  `render.yaml`.
+
+### Final state
+- **462 tests green**

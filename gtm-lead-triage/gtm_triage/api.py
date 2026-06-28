@@ -444,7 +444,10 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
     if result.enrichment:
         crm_data["industry"] = result.enrichment.get("industry", "")
         crm_data["seniority"] = result.enrichment.get("seniority", "")
-    _crm.upsert(lead.email, crm_data)
+    try:
+        _crm.upsert(lead.email, crm_data)
+    except Exception as exc:
+        logger.warning("CRM upsert failed for %s: %s", lead.email, exc)
 
     # Store idempotency key → result (with provider tag)
     result_dict = result.model_dump()
