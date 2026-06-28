@@ -91,6 +91,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         app_env = os.environ.get("APP_ENV", "development")
         path = request.url.path
 
+        # CORS preflight (OPTIONS) must pass through to CORSMiddleware
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         # Public paths always skip auth
         if path in _PUBLIC_PATHS:
             return await call_next(request)

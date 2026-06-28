@@ -474,3 +474,20 @@ Slipped through because existing tests mocked `fetchall.return_value = []`
 
 ### Final state
 - **459 tests green**, mock eval gate 5/5
+
+## 2026-06-28 — CORS preflight fix (OPTIONS blocked by AuthMiddleware)
+
+### Bug
+Browser sends an OPTIONS preflight before every cross-origin POST. Starlette
+middleware runs outside-in (last-added first), so `AuthMiddleware` (added after
+`CORSMiddleware`) ran BEFORE it. The OPTIONS request had no API key →
+AuthMiddleware returned 401 → CORSMiddleware never ran → browser got no
+`Access-Control-Allow-Origin` header → "Failed to fetch."
+
+### Fix
+`middleware.py`: skip auth for `request.method == "OPTIONS"` — let it pass
+through to CORSMiddleware which handles the preflight response with the
+correct CORS headers.
+
+### Final state
+- **459 tests green**
