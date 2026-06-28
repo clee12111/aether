@@ -154,6 +154,40 @@ class HubSpotCRM(CRMStore):
         activities.reverse()
         return [{"activity": a} for a in activities]
 
+    def list_contacts(self, limit: int = 50) -> list[dict[str, Any]]:
+        """List recently modified contacts that have a gtm_tier set."""
+        body = {
+            "filterGroups": [{
+                "filters": [{
+                    "propertyName": "gtm_tier",
+                    "operator": "HAS_PROPERTY",
+                }]
+            }],
+            "properties": _READ_PROPS,
+            "sorts": [{"propertyName": "lastmodifieddate", "direction": "DESCENDING"}],
+            "limit": min(limit, 100),
+        }
+        resp = self._client.post("/crm/v3/objects/contacts/search", json=body)
+        if resp.status_code != 200:
+            logger.warning("HubSpot list_contacts search failed: %d %s", resp.status_code, resp.text)
+            return []
+
+        results = []
+        for contact in resp.json().get("results", []):
+            props = contact.get("properties", {})
+            name = f"{props.get('firstname', '')} {props.get('lastname', '')}".strip()
+            results.append({
+                "email": props.get("email", ""),
+                "name": name,
+                "company": props.get("company", ""),
+                "tier": props.get("gtm_tier", ""),
+                "score": props.get("gtm_score", ""),
+                "route": props.get("gtm_route", ""),
+                "industry": props.get("gtm_industry", ""),
+                "seniority": props.get("gtm_seniority", ""),
+            })
+        return results
+
     def close(self) -> None:
         if self._owns_client:
             self._client.close()

@@ -336,7 +336,7 @@ def get_outcome_metrics() -> dict[str, Any]:
 
     Returns empty per-tier objects if no outcomes have been recorded.
     """
-    if not _trace or not hasattr(_trace, "get_outcome_metrics"):
+    if not _trace:
         return {}
     return _trace.get_outcome_metrics()
 
@@ -534,9 +534,7 @@ def get_run(run_id: str) -> dict[str, Any]:
 
 @app.get("/leads")
 def list_leads(limit: int = 50) -> list[dict[str, Any]]:
-    if isinstance(_crm, SQLiteCRM):
-        return _crm.list_contacts(limit)
-    return []
+    return _crm.list_contacts(limit)
 
 
 @app.get("/runs")
@@ -548,7 +546,7 @@ def list_runs(limit: int = 50) -> list[dict[str, Any]]:
 def delete_contact(email: str) -> dict[str, Any]:
     """Right-to-erasure: delete contact record, activities, and trace data."""
     crm_deleted = _crm.delete_contact(email)
-    trace_runs_deleted = _trace.delete_by_email(email) if hasattr(_trace, "delete_by_email") else 0
+    trace_runs_deleted = _trace.delete_by_email(email)
     if not crm_deleted and trace_runs_deleted == 0:
         raise HTTPException(status_code=404, detail=f"No data found for {email}")
     return {

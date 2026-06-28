@@ -622,3 +622,36 @@ set up.
 
 ### Final state
 - **462 tests green**
+
+## 2026-06-28 — Phase N: Transferability audit + /leads fix
+
+### Audit
+Full read-only audit of abstraction leaks, interface completeness, backend
+parity, hardcoded assumptions, motion coupling, and swap tests. Report at
+`docs/audit/TRANSFERABILITY_AUDIT.md`.
+
+### Root cause of empty ops board
+`api.py:537`: `/leads` was hardcoded to `isinstance(_crm, SQLiteCRM)` and
+returned `[]` for any other backend. HubSpot contacts existed but were
+invisible to the frontend.
+
+### Fixes
+- `CRMStore.list_contacts()` added to ABC (`crm/base.py`) with default `[]`.
+- `HubSpotCRM.list_contacts()` implemented — HubSpot v3 search, filter by
+  contacts with `gtm_tier` set, sorted by last-modified.
+- `/leads` endpoint: removed `isinstance`, calls `_crm.list_contacts()`.
+- Removed 2 `hasattr()` guards on protocol methods (`api.py:339, 551`).
+
+### Key audit findings (not yet fixed)
+1. **LLM provider has no abstraction** — adding Anthropic requires 8+ file
+   changes. No `LLMProvider` interface; enrichment extractors instantiate
+   `openai.OpenAI()` directly.
+2. **Model defaults scattered** — `"gpt-4o-mini"` hardcoded in 8 files;
+   `GTM_MODEL` env var doesn't cascade to enrichment.
+3. **Inbound motion baked into prompts/templates** — system prompt, draft
+   templates, and pre-signal extraction assume inbound. Outbound needs new
+   prompt + templates + trigger, but core (enrichment, CRM, scoring, trace)
+   is reusable.
+
+### Final state
+- **470 tests green** (462 + 8 new list_contacts/ABC tests)

@@ -195,3 +195,55 @@ class TestGetActivities:
 
         activities = crm.get_activities("test@acme.com")
         assert activities == []
+
+
+class TestListContacts:
+    def test_returns_contacts_with_gtm_tier(self):
+        client = MagicMock(spec=httpx.Client)
+        client.post.return_value = _mock_response(200, {
+            "total": 1,
+            "results": [
+                {
+                    "id": "101",
+                    "properties": {
+                        "email": "vp@stripe.com",
+                        "firstname": "Jane",
+                        "lastname": "Doe",
+                        "company": "Stripe",
+                        "gtm_tier": "hot",
+                        "gtm_score": "85",
+                        "gtm_route": "ae_immediate",
+                        "gtm_industry": "financial_services",
+                        "gtm_seniority": "vp",
+                    },
+                },
+            ],
+        })
+        crm = HubSpotCRM("tok", client=client)
+
+        leads = crm.list_contacts(10)
+
+        assert len(leads) == 1
+        assert leads[0]["email"] == "vp@stripe.com"
+        assert leads[0]["name"] == "Jane Doe"
+        assert leads[0]["tier"] == "hot"
+        assert leads[0]["score"] == "85"
+
+        # Verify it used search with HAS_PROPERTY filter
+        call_args = client.post.call_args
+        body = call_args[1]["json"]
+        assert body["filterGroups"][0]["filters"][0]["propertyName"] == "gtm_tier"
+
+    def test_empty_when_no_triaged_contacts(self):
+        client = MagicMock(spec=httpx.Client)
+        client.post.return_value = _mock_response(200, {"total": 0, "results": []})
+        crm = HubSpotCRM("tok", client=client)
+
+        assert crm.list_contacts() == []
+
+    def test_returns_empty_on_api_error(self):
+        client = MagicMock(spec=httpx.Client)
+        client.post.return_value = _mock_response(500)
+        crm = HubSpotCRM("tok", client=client)
+
+        assert crm.list_contacts() == []

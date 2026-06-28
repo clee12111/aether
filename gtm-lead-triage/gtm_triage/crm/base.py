@@ -29,6 +29,14 @@ class CRMStore(ABC):
         """Return all activities for a contact, newest first."""
         ...
 
+    def list_contacts(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Return recently upserted contacts, newest first.
+
+        Each entry should include at minimum: email, name, company, tier,
+        score, route, run_id. Optional: industry, seniority, last_activity.
+        """
+        return []  # default empty; override in implementations
+
     def delete_contact(self, email: str) -> bool:
         """Delete a contact and all its activities (right-to-erasure).
 
