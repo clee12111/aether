@@ -531,7 +531,22 @@ def get_run(run_id: str) -> dict[str, Any]:
 
 @app.get("/leads")
 def list_leads(limit: int = 50) -> list[dict[str, Any]]:
-    return _crm.list_contacts(limit)
+    contacts = _crm.list_contacts(limit)
+
+    # Join CRM contacts with their latest run from the trace store.
+    # list_runs returns lead_email + run_id from run_end events.
+    runs = _trace.list_runs(limit=200)
+    email_to_run: dict[str, str] = {}
+    for r in runs:
+        em = r.get("lead_email", "")
+        if em and em not in email_to_run:
+            email_to_run[em] = r["run_id"]
+
+    for contact in contacts:
+        if "run_id" not in contact or not contact.get("run_id"):
+            contact["run_id"] = email_to_run.get(contact.get("email", ""), "")
+
+    return contacts
 
 
 @app.get("/runs")

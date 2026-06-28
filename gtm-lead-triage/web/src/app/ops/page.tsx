@@ -238,6 +238,7 @@ export default function OpsDashboard() {
       } catch { setSelectedRun(null); }
       finally { setDetailLoading(false); }
     }
+    // No run_id — detail panel shows "no trace" state (handled in render)
   }
 
   function togglePhase(i: number) {
@@ -379,6 +380,15 @@ export default function OpsDashboard() {
           )}
 
           {detailLoading && <DetailSkeleton />}
+
+          {selectedEmail && !detailLoading && !selectedRun && selectedLead && (
+            <div className="flex flex-col items-center justify-center h-full text-center px-6">
+              <p className="text-sm font-medium text-zinc-700 mb-1">{selectedLead.name || selectedEmail}</p>
+              <p className="text-xs text-zinc-400 mb-3">{selectedLead.tier && `${selectedLead.tier} / ${selectedLead.route || ""}`}</p>
+              <p className="text-xs text-zinc-400">No triage trace found for this contact.</p>
+              <p className="text-[10px] text-zinc-300 mt-1">The contact exists in CRM but has no linked run in the trace store.</p>
+            </div>
+          )}
 
           {selectedRun && selectedLead && (
             <div className="p-6 max-w-3xl space-y-5">

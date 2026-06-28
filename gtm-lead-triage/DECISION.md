@@ -723,3 +723,33 @@ up to 8 times with 4s intervals to account for this.
 ### Final state
 - **480 passed, 6 skipped** (live tests skipped without token)
 - Mock eval gate: 5/5
+
+## 2026-06-28 — Phase N5: Ops detail panel + Company optional
+
+### Bug: blank detail panel
+`/leads` returned HubSpot contacts (CRM fields only) with no `run_id`.
+The frontend's `selectLead()` checked `if (lead.run_id)` to fetch the
+trace — HubSpot contacts had none, so nothing rendered. Same "built for
+SQLite" leak: SQLiteCRM.list_contacts() returned run_id because it stored
+it locally; HubSpot had no concept of it.
+
+### Fix: join CRM leads with trace store
+`/leads` now fetches `list_runs(200)` from the trace store and joins by
+`lead_email` → `run_id`. This is backend-agnostic — works for both
+SQLite CRM and HubSpot. The frontend fetches `/runs/{run_id}` on click
+and renders the full trace. A clean "no trace found" empty state is shown
+for CRM contacts that predate the trace store.
+
+### Company optional
+- Frontend label updated: "Company (optional)"
+- Backend: `company` already defaults to `""` in TriageRequest
+- Verified: company-less leads triage correctly (enrichment derives
+  industry from email domain, scoring works on available signals)
+
+### Tests added
+- `test_leads_include_run_id_from_trace`: triage → CRM upsert → /leads
+  join returns the run_id
+- `test_company_optional_triages_successfully`: empty company → valid tier
+
+### Final state
+- **482 passed, 6 skipped**

@@ -193,7 +193,7 @@ export default function LeadForm() {
                   <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} placeholder="julia@acmecorp.com" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">Company</label>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">Company <span className="text-zinc-400 font-normal">(optional)</span></label>
                   <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className={inputClass} placeholder="Acme Corp" />
                 </div>
                 <div>
