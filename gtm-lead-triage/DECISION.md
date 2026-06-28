@@ -693,3 +693,33 @@ To add Anthropic: `pip install anthropic` + set `GTM_PROVIDER=anthropic`
 ### Final state
 - **480 tests green** (470 + 10 LLM provider tests)
 - Mock eval gate: 5/5
+
+## 2026-06-28 — Phase N3: Live HubSpot integration test
+
+### Test
+`tests/test_hubspot_live.py` — exercises the full CRMStore contract against
+real HubSpot (portal 246604586). Gated on `HUBSPOT_TOKEN` present; skips
+when absent (keyless CI unaffected).
+
+### Results (6/6 PASS)
+1. **upsert** (tier=hot, score=88) → PASS
+2. **lookup** → found, tier=hot, score=88 → PASS
+3. **list_contacts** → test contact returned (4 total, after 1 retry for
+   search index lag ~4s) → PASS
+4. **smoke-test contact** (gtm-smoke-test@aether-gtm-demo.com) in
+   list_contacts → PASS, tier=hot
+5. **add_activity** + dedup → PASS
+6. **delete_contact** → PASS (cleanup)
+
+### Diagnosis confirmed
+`list_contacts()` search works correctly against real HubSpot. The `/leads`
+returning `[]` on Render was caused by the `isinstance(SQLiteCRM)` leak
+(fixed in Phase N), NOT a broken HubSpot search.
+
+HubSpot search is eventually consistent (~4-8s lag for newly created
+contacts to appear in `HAS_PROPERTY` filter results). The test retries
+up to 8 times with 4s intervals to account for this.
+
+### Final state
+- **480 passed, 6 skipped** (live tests skipped without token)
+- Mock eval gate: 5/5
