@@ -410,3 +410,41 @@ Closes the verified top-5 from the reconciled audit before deploy.
 - **455 tests green** (405 existing + 46 scoring + 4 degradation)
 - **Mock eval gate: 5/5**
 - All existing tests unaffected (no regressions)
+
+## 2026-06-27 — Phase M: Deploy config (auth + frontend wiring)
+
+### Frontend auth (web/src/lib/api.ts)
+- Every request sends `X-API-Key` header from `NEXT_PUBLIC_GTM_API_KEY` env var.
+- Friendly error messages for 401 ("check your API key"), 429 ("rate limit"),
+  503 ("cold-start, try again in ~30 seconds") — no raw crashes.
+- Demo key is intentionally public: rate-limited (60 RPM), API triages
+  synthetic leads only, never sends real email.
+
+### render.yaml finalized
+- `GTM_PROVIDER=openai` (was `mock`) — live LLM scoring for demo.
+- `CRM_BACKEND=sqlite` (was `hubspot`) — no HubSpot dependency for demo.
+- Added `ENRICHMENT_PROVIDER=pdl` + `PDL_API_KEY` (secret).
+- All secrets via `sync: false` (Render secret env vars), none hardcoded.
+
+### DEPLOY.md rewritten
+- Clear env var tables for both Render and Vercel dashboards.
+- Cold-start warning + warmup note for Render free tier.
+- Verification checklist (8 steps: health, auth, CORS, triage, ops, rate limit, cold-start).
+
+### Env vars needed
+
+**Render dashboard:**
+- `APP_ENV=production`
+- `GTM_PROVIDER=openai`
+- `GTM_API_KEYS=demo-<random>` (secret)
+- `OPENAI_API_KEY=sk-proj-...` (secret)
+- `ENRICHMENT_PROVIDER=pdl`
+- `PDL_API_KEY=...` (secret)
+- `FRONTEND_ORIGIN=https://<app>.vercel.app`
+- `CRM_BACKEND=sqlite`
+- `DATABASE_URL` (optional, Neon Postgres; omit for SQLite)
+- `LANGFUSE_*` (optional)
+
+**Vercel dashboard:**
+- `NEXT_PUBLIC_API_URL=https://<render-url>`
+- `NEXT_PUBLIC_GTM_API_KEY=demo-<same-key-as-Render>`

@@ -1,97 +1,115 @@
-# DEPLOY.md - Aether GTM Lead-Triage Deployment Guide
-
-Three services: Neon (Postgres), Render (API), Vercel (frontend).
+# DEPLOY.md — GTM Lead-Triage Deployment Guide
 
 ## Architecture
 
 ```
-Browser (Vercel)             API (Render)                   Data
-  localhost:3000        ->     POST /triage           ->   Neon Postgres (traces)
-  or your-app.vercel.app      GET  /leads, /runs          HubSpot (CRM)
-                               GET  /runs/{id}             Langfuse (observability)
+Browser (Vercel)              API (Render free-tier)          Data
+  your-app.vercel.app   ->     POST /triage            ->   SQLite (traces, CRM)
+                               GET  /leads, /runs           or Neon Postgres
+                               GET  /config                 Langfuse (optional)
+                               X-API-Key: demo-xxx          PDL (enrichment)
 ```
 
-## 1. Neon (Postgres for trace store)
+Auth is REQUIRED in production. The frontend sends a rate-limited demo key
+on every request. This is acceptable — the API triages fake leads only, never
+sends real email, and is rate-limited to 60 RPM.
 
-1. Go to [neon.tech](https://neon.tech) and create a free project.
-2. Create a database (default name `neondb` is fine).
-3. Copy the **connection string** from the dashboard:
-   ```
-   postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require
-   ```
-4. Save this as `DATABASE_URL` for the Render step below.
+---
 
-The API creates its tables (`trace_events`, `idempotency_keys`) on first
-startup. No manual migration needed.
+## Render (Backend API)
 
-## 2. Render (API)
+### Environment variables
 
-1. Go to [render.com](https://render.com) > New > Web Service.
-2. Connect your GitHub repo. Set:
-   - **Root directory:** `gtm-lead-triage`
-   - **Runtime:** Docker
-   - **Dockerfile path:** `./Dockerfile`
-   - **Plan:** Free (or Starter for always-on)
-3. Set environment variables:
+| Variable | Value | Type | Required |
+|----------|-------|------|----------|
+| `APP_ENV` | `production` | Plain | Yes |
+| `GTM_PROVIDER` | `openai` | Plain | Yes |
+| `GTM_MODEL` | `gpt-4o-mini` | Plain | No (default) |
+| `GTM_API_KEYS` | `demo-<random-32-chars>` | **Secret** | Yes |
+| `OPENAI_API_KEY` | `sk-proj-...` | **Secret** | Yes |
+| `ENRICHMENT_PROVIDER` | `pdl` | Plain | No (default: mock) |
+| `PDL_API_KEY` | `(your PDL dev key)` | **Secret** | When ENRICHMENT_PROVIDER=pdl |
+| `CRM_BACKEND` | `sqlite` | Plain | No (default) |
+| `DATABASE_URL` | _(Neon connection string, or leave unset for SQLite)_ | **Secret** | No |
+| `FRONTEND_ORIGIN` | `https://<your-app>.vercel.app` | Plain | Yes |
+| `LANGFUSE_PUBLIC_KEY` | _(optional)_ | **Secret** | No |
+| `LANGFUSE_SECRET_KEY` | _(optional)_ | **Secret** | No |
+| `LANGFUSE_BASE_URL` | _(e.g. https://us.cloud.langfuse.com)_ | Plain | No |
 
-| Variable | Value | Required |
-|----------|-------|----------|
-| `DATABASE_URL` | Neon connection string from step 1 | Yes |
-| `GTM_PROVIDER` | `mock` (default, free) or `openai` (real LLM, costs tokens) | Yes |
-| `GTM_MODEL` | `gpt-4o-mini` (only when GTM_PROVIDER=openai) | No |
-| `CRM_BACKEND` | `hubspot` (recommended) or `sqlite` | Yes |
-| `HUBSPOT_TOKEN` | Your HubSpot Private App token | When CRM_BACKEND=hubspot |
-| `OPENAI_API_KEY` | Your OpenAI API key | When GTM_PROVIDER=openai |
-| `FRONTEND_ORIGIN` | Your Vercel URL, e.g. `https://your-app.vercel.app` | Yes |
-| `LANGFUSE_PUBLIC_KEY` | Langfuse public key | No |
-| `LANGFUSE_SECRET_KEY` | Langfuse secret key | No |
-| `LANGFUSE_BASE_URL` | `https://us.cloud.langfuse.com` (or your host) | No |
+**Notes:**
+- `GTM_API_KEYS` is comma-separated. Use the same value for the frontend's
+  `NEXT_PUBLIC_GTM_API_KEY`.
+- `FRONTEND_ORIGIN` must include `https://` and match the Vercel URL exactly.
+  For local + deployed access: `https://your-app.vercel.app,http://localhost:3000`.
+- Auth is fail-closed: `APP_ENV=production` + missing `GTM_API_KEYS` → all
+  authenticated endpoints return 503.
+- No secrets baked into the Docker image. Dockerfile copies only `gtm_triage/`.
 
-4. Deploy. The health check is `GET /health`.
-5. Copy the Render URL (e.g. `https://gtm-triage-api.onrender.com`).
+### Cold-start warning (free tier)
 
-## 3. Vercel (Frontend)
+Render free tier spins down after ~15 minutes of inactivity. First request
+after idle takes 30-60 seconds (Docker restart + `/ready` probe). The frontend
+handles 503 with a friendly "Service is starting up" message.
 
-1. Go to [vercel.com](https://vercel.com) > Add New > Project.
-2. Import your GitHub repo. Set:
-   - **Root directory:** `gtm-lead-triage/web`
-   - **Framework preset:** Next.js (auto-detected)
-   - **Build command:** `npm run build`
-   - **Output directory:** (leave default)
-3. Set environment variable:
-
-| Variable | Value | Required |
-|----------|-------|----------|
-| `NEXT_PUBLIC_API_URL` | Your Render URL from step 2, e.g. `https://gtm-triage-api.onrender.com` | Yes |
-
-4. Deploy.
-
-## After deploy: update FRONTEND_ORIGIN on Render
-
-Once you have the Vercel URL, go back to Render and set `FRONTEND_ORIGIN` to
-your Vercel URL (e.g. `https://your-app.vercel.app`). This enables CORS from
-the deployed frontend.
-
-If you need both local and deployed access:
-```
-FRONTEND_ORIGIN=https://your-app.vercel.app,http://localhost:3000
+**Warmup after deploy:**
+```bash
+curl https://<your-render-url>/ready
 ```
 
-## Trade-offs for the public form
+### Health check
+
+`render.yaml` uses `/ready` (not `/health`). The `/ready` endpoint calls
+`SELECT 1` on the trace store and CRM, returning 503 if either is down.
+
+---
+
+## Vercel (Frontend)
+
+### Environment variables
+
+| Variable | Value | Type | Required |
+|----------|-------|------|----------|
+| `NEXT_PUBLIC_API_URL` | `https://<your-render-url>` | Plain | Yes |
+| `NEXT_PUBLIC_GTM_API_KEY` | `demo-<same-key-as-Render>` | Plain | Yes |
+
+**Notes:**
+- `NEXT_PUBLIC_` prefix is required — these are client-side env vars exposed
+  to the browser. The demo key is intentionally public: rate-limited, triages
+  synthetic leads only.
+- Root directory in Vercel: `gtm-lead-triage/web`
+- Framework: Next.js (auto-detected)
+
+---
+
+## Provider modes
 
 | GTM_PROVIDER | Behavior | Cost | Speed |
 |-------------|----------|------|-------|
-| `mock` (default) | Deterministic rules, no LLM | Free | Instant |
-| `openai` | Real LLM reasoning, enrichment, score adjustment | ~$0.001/lead | ~11s/lead |
+| `mock` | Deterministic rules only, no LLM | Free | Instant |
+| `openai` | Real LLM reasoning + score adjustment | ~$0.001/lead | ~5-10s |
 
-**Recommendation:** Start with `mock`. It scores and routes correctly based on
-rules. Flip to `openai` when you want LLM enrichment of unknown fields and
-the score nudge. HubSpot writes are real in both modes.
+With `ENRICHMENT_PROVIDER=pdl`, PDL Person Enrichment runs on business emails
+(100/month free tier). Without it, regex-based enrichment is used.
 
-## Local development (unchanged)
+---
+
+## Verification checklist
+
+1. **Backend health:** `curl https://<render-url>/ready` → `{"ready": true, ...}`
+2. **Auth rejects unauthenticated:** `curl https://<render-url>/config` → `401`
+3. **Auth with key:** `curl -H "X-API-Key: demo-..." https://<render-url>/config` → `200`
+4. **CORS:** Frontend at Vercel URL can POST to `/triage` without CORS errors
+5. **Triage flow:** Submit a preset lead → see tier/route/score in result card
+6. **Ops dashboard:** `/ops` shows lead list + trace details
+7. **Rate limiting:** Rapid-fire > 60 RPM → `429`
+8. **Cold-start UX:** Wait 15+ min, submit → "Service is starting up" → result after warmup
+
+---
+
+## Local development
 
 ```bash
-# Terminal 1: API (SQLite, no DATABASE_URL)
+# Terminal 1: API (no auth, SQLite)
 cd gtm-lead-triage
 python -m uvicorn gtm_triage.api:app --host 127.0.0.1 --port 8000
 
@@ -100,23 +118,5 @@ cd gtm-lead-triage/web
 npm run dev
 ```
 
-No DATABASE_URL = SQLite trace store. No HUBSPOT_TOKEN = SQLite CRM. The
-local path is unchanged and requires no cloud accounts.
-
-## Complete env var reference
-
-| Variable | Where | Default | Purpose |
-|----------|-------|---------|---------|
-| `DATABASE_URL` | Render | (none, SQLite) | Postgres DSN for trace store |
-| `GTM_PROVIDER` | Render | `mock` | LLM provider |
-| `GTM_MODEL` | Render | `gpt-4o-mini` | Model name (openai only) |
-| `CRM_BACKEND` | Render | `sqlite` | CRM backend |
-| `GTM_CRM_DB` | Local | `gtm_crm.db` | SQLite CRM path (local only) |
-| `GTM_TRACE_DB` | Local | `gtm_trace.db` | SQLite trace path (local only) |
-| `HUBSPOT_TOKEN` | Render | (none) | HubSpot Private App token |
-| `OPENAI_API_KEY` | Render | (none) | OpenAI API key |
-| `FRONTEND_ORIGIN` | Render | `http://localhost:3000` | Allowed CORS origins |
-| `LANGFUSE_PUBLIC_KEY` | Render | (none) | Langfuse public key |
-| `LANGFUSE_SECRET_KEY` | Render | (none) | Langfuse secret key |
-| `LANGFUSE_BASE_URL` | Render | (none) | Langfuse host URL |
-| `NEXT_PUBLIC_API_URL` | Vercel | `http://localhost:8000` | API base URL for frontend |
+No `APP_ENV`, `GTM_API_KEYS`, or `DATABASE_URL` → auth disabled, SQLite for
+everything. The local path requires no cloud accounts.

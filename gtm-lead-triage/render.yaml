@@ -10,12 +10,14 @@ services:
       - key: APP_ENV
         value: production
       - key: GTM_PROVIDER
-        value: mock
+        value: openai
       - key: GTM_API_KEYS
         sync: false
       - key: CRM_BACKEND
-        value: hubspot
-      - key: HUBSPOT_TOKEN
+        value: sqlite
+      - key: ENRICHMENT_PROVIDER
+        value: pdl
+      - key: PDL_API_KEY
         sync: false
       - key: OPENAI_API_KEY
         sync: false
