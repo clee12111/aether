@@ -283,3 +283,29 @@ Lead messages are ATTACKER-CONTROLLED text that flows into: (1) LLM extraction +
 - Coverage: 83.14% (floor 70%).
 - Mock CI gate: 5/5.
 - `tests/conftest.py`: sets high rate limit default to prevent cross-test bucket exhaustion.
+
+## 2026-06-27 — Hardening track merge consolidation
+
+### Merge to main
+All hardening branches (phase-e2 through phase-l) merged to main in dependency
+order. Phases e2 through j were already ancestors of main; phases k and l
+fast-forwarded cleanly (no conflicts — disjoint files).
+
+### CI fixes applied on main
+1. `test_trace_store_parity.py`: guarded `PostgresTraceStore` import behind
+   `try/except ImportError` (psycopg not in CI deps).
+2. `test_pg_store.py`: added `pytestmark = pytest.mark.skipif(not _HAS_PSYCOPG)`
+   to skip entire module when psycopg unavailable.
+3. `TraceStoreProtocol` + `PostgresTraceStore`: added missing methods (ping,
+   delete_by_email, record_outcome, get_outcome, get_outcome_metrics) + 002_outcomes
+   migration. Protocol/impl parity restored.
+4. `ErrorRateMonitor._last_alert_time`: initialized to `-(cooldown+1)` instead of
+   `0.0` to ensure first alert fires even when `time.monotonic() < cooldown_seconds`
+   (CI runners with uptime < 300s).
+
+### Final numbers on main
+- **405 tests green** (local + CI)
+- **Coverage: 76% CI / 81% local** (floor: 70%)
+- **Mock eval gate: 5/5**
+- **GitHub Actions CI: green** (run 28307610669)
+- Commit: ae970d1 on main, pushed to origin/main
