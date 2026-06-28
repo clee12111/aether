@@ -2,6 +2,8 @@
 
 Verifies correct SQL, parameter passing, and return shapes WITHOUT a live
 Postgres database.
+
+Skipped entirely when psycopg is not installed (CI without Postgres deps).
 """
 
 from __future__ import annotations
@@ -11,6 +13,14 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch, call
 
 import pytest
+
+try:
+    import psycopg  # noqa: F401
+    _HAS_PSYCOPG = True
+except ImportError:
+    _HAS_PSYCOPG = False
+
+pytestmark = pytest.mark.skipif(not _HAS_PSYCOPG, reason="psycopg not installed")
 
 
 def _make_store():

@@ -84,7 +84,7 @@ class ErrorRateMonitor:
             os.environ.get("ALERT_COOLDOWN_SECONDS", "300")
         )
         self._window = window_seconds
-        self._last_alert_time = 0.0
+        self._last_alert_time = -(self._cooldown + 1)  # Ensure first check can fire
 
     def check(self, error_rate: float, error_count: int, request_count: int) -> bool:
         """Check error rate and fire alert if above threshold. Returns True if alert fired."""
