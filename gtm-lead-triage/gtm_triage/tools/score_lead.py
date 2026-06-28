@@ -253,13 +253,21 @@ class ScoreLeadTool(BaseTool):
 
         rule_tier, _ = _classify(rule_points)
 
-        # LLM adjustment (openai provider only)
+        # Injection flag: if enrichment flagged prompt injection, skip LLM
+        # adjustment entirely — the message text cannot be trusted as input
+        # to a scoring LLM.
+        injection_flagged = bool(enrichment.get("injection_flagged"))
+
+        # LLM adjustment (openai provider only, skipped if injection flagged)
         llm_adjustment = 0
         llm_reason = ""
         llm_tokens_in = 0
         llm_tokens_out = 0
 
-        if self._provider == "openai":
+        if injection_flagged:
+            llm_reason = "skipped: injection_flagged"
+            logger.info("Skipping LLM adjustment for %s: injection_flagged", email)
+        elif self._provider == "openai":
             from gtm_triage.agents.llm_client import infer_score_adjustment
             llm_adjustment, llm_reason, llm_tokens_in, llm_tokens_out = infer_score_adjustment(
                 email=email, name=name, company=company, message=message,
@@ -276,7 +284,7 @@ class ScoreLeadTool(BaseTool):
         total = max(0, min(100, rule_points + llm_adjustment))
         tier, route = _classify(total)
 
-        return {
+        result = {
             "email": email,
             "points": total,
             "tier": tier,
@@ -288,3 +296,6 @@ class ScoreLeadTool(BaseTool):
             "llm_tokens_in": llm_tokens_in,
             "llm_tokens_out": llm_tokens_out,
         }
+        if injection_flagged:
+            result["injection_flagged"] = True
+        return result

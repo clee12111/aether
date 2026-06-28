@@ -64,8 +64,12 @@ firmographics.
    - **Email validity**: MX/DNS lookup + disposable-domain blocklist. Invalid
      email → short-circuit to disqualified, no enrichment needed.
    - **PDL call**: on valid business email, call PDL Person Enrichment.
-   - **Fallback on miss**: if PDL returns no match, fetch company website
-     (domain → homepage) + LLM read for basic firmographics.
+   - **Fallback on miss** *(built but disabled by default)*: if PDL returns
+     no match, a website-fetch + LLM read path exists (`WebsiteFallback`)
+     but is disabled in production (`skip_website=True` in `api.py`) to
+     avoid latency and external fetch costs during demos. The DIG_DEEPER
+     trace path calls this subroutine when both industry and company_size
+     are unknown; it can be re-enabled by setting `skip_website=False`.
 3. **Source + confidence tagging** — every enrichment field carries its source
    (`pdl`, `dns`, `llm_fallback`, `regex`, `crm`) and a per-field confidence.
    The overall confidence is derived from source quality, not boolean sums.
@@ -84,9 +88,10 @@ firmographics.
 - [ ] Invalid email → short-circuit, no PDL call made (unit test).
 - [ ] PDL response is parsed into the `Enrichment` Pydantic model with
       `source="pdl"` per field.
-- [ ] On PDL miss, company-website fetch + LLM read runs as fallback (integration
-      test with mock HTTP).
-- [ ] Rate-limit guard: after 100 calls, PDL is skipped and fallback runs.
+- [ ] On PDL miss, company-website fetch + LLM read is BUILT but disabled by
+      default (`skip_website=True`). DIG_DEEPER path available when enabled.
+- [ ] Rate-limit guard: after 100 calls, PDL is skipped (not implemented —
+      silent degradation on quota exhaustion; acceptable for demo volume).
 - [ ] Response cache: same email within a session doesn't re-call PDL.
 - [ ] Old regex logic is demoted to `MockProvider` (kept for CI/deterministic
       tests only).

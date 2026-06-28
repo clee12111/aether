@@ -26,6 +26,7 @@ from gtm_triage.agents.langfuse_wrapper import end_trace, get_trace_span
 from gtm_triage.agents.llm_client import chat
 from gtm_triage.models.action import AgentAction, LoopStep, Observation, TriageResult
 from gtm_triage.models.lead import Lead
+from gtm_triage.resilience import retry_with_backoff
 from gtm_triage.trace.store import TraceStore
 
 logger = logging.getLogger(__name__)
@@ -364,6 +365,57 @@ def _dig_deeper_enrich(
     return None
 
 
+def _degrade_to_mock(
+    lead: Lead,
+    result: TriageResult,
+    steps: list[LoopStep],
+    executor: Executor,
+    run_id: str,
+    trace: TraceStore,
+) -> TriageResult:
+    """Fall back to mock-provider scoring when the LLM is unavailable.
+
+    Uses whatever enrichment was already gathered (from prior steps) and
+    runs the deterministic scorer (provider=mock, llm_adjustment=0) to
+    produce a valid tier/route instead of crashing with a 500.
+    """
+    from gtm_triage.tools.score_lead import ScoreLeadTool
+
+    enrichment = result.enrichment or {}
+    scorer = ScoreLeadTool(provider="mock")
+    score_result = scorer.run({
+        "email": lead.email,
+        "name": lead.name,
+        "company": lead.company,
+        "message": lead.message,
+        "enrichment": enrichment,
+    }, run_id=run_id)
+
+    result.score = score_result
+    result.final_tier = score_result.get("tier")
+    result.final_route = score_result.get("route")
+
+    steps.append(LoopStep(
+        step_index=len(steps),
+        action=AgentAction(
+            reasoning="LLM unavailable after retries — degraded to mock-provider scoring.",
+            tool="score_lead",
+            tool_args={"degraded": True},
+            is_final=True,
+        ),
+        observation=Observation(output=score_result),
+    ))
+
+    trace.write(
+        run_id=run_id,
+        event_type="tool_call",
+        agent="loop_agent",
+        payload={"tool": "score_lead", "degraded": True, "tier": result.final_tier},
+    )
+
+    return result
+
+
 def run_triage(
     lead: Lead,
     executor: Executor,
@@ -450,15 +502,35 @@ def run_triage(
         user_prompt = _build_user_prompt(lead, steps, pre_signals)
 
         t0 = time.time()
-        chat_result = chat(
-            provider=provider,
-            model=model,
-            system=_SYSTEM_PROMPT,
-            user=user_prompt,
-            max_tokens=1024,
-            run_id=run_id,
-            generation_name=f"decide-step-{step_idx}",
-        )
+        try:
+            chat_result = retry_with_backoff(
+                chat,
+                provider=provider,
+                model=model,
+                system=_SYSTEM_PROMPT,
+                user=user_prompt,
+                max_tokens=1024,
+                run_id=run_id,
+                generation_name=f"decide-step-{step_idx}",
+            )
+        except Exception as exc:
+            # LLM failed after retries — degrade gracefully instead of 500.
+            # Fall back to mock-provider scoring with whatever enrichment we have.
+            duration_ms = int((time.time() - t0) * 1000)
+            logger.warning("LLM failed after retries at step %d: %s", step_idx, exc)
+            trace.write(
+                run_id=run_id,
+                event_type="llm_call",
+                agent="loop_agent",
+                payload={"llm_error": str(exc), "step": step_idx, "degraded": True},
+                error=str(exc),
+                duration_ms=duration_ms,
+            )
+            result = _degrade_to_mock(lead, result, steps, executor, run_id, trace)
+            result.trace_path = trace_path
+            result.steps = steps
+            _finalize_trace(trace, run_id, result, lead, pre_signals)
+            return result
         duration_ms = int((time.time() - t0) * 1000)
 
         trace.write(

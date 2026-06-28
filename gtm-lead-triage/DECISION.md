@@ -24,7 +24,7 @@ email arrives
   → disposable-domain blocklist check (free, static list)
   → INVALID? → short-circuit to disqualified, no enrichment
   → PDL Person Enrichment (100/month free tier)
-  → PDL MISS? → company-website fetch (httpx) + LLM read for basic firmographics
+  → PDL MISS? → website fallback BUILT but disabled (skip_website=True); DIG_DEEPER available when enabled
   → cache result by email (in-memory, per-session)
 ```
 
@@ -369,3 +369,44 @@ Reconciled: 0 blockers, 1 major (R3: LLM failure aborts triage), rest minor/info
 - **Mock eval gate: 5/5**
 - **pip-audit: clean**
 - Reconciled audit report: `docs/audit/PRODUCTION_READINESS_AUDIT.md`
+
+## 2026-06-27 — Phase M: Demo-readiness fixes (verified top-5)
+
+Closes the verified top-5 from the reconciled audit before deploy.
+
+### 1. R3+R1: LLM guard + retry (BLOCKER closed)
+- Wrapped `chat()` call in `retry_with_backoff()` (2 retries, exponential
+  backoff + jitter) at `loop_agent.py:452`.
+- On failure after retries: `_degrade_to_mock()` runs the deterministic
+  scorer (provider=mock, llm_adjustment=0) with whatever enrichment was
+  already gathered. Returns a valid TriageResult — never a raw 500.
+- Traces the LLM error and the degraded scoring step.
+- 4 new tests in `test_llm_degradation.py`: ConnectionError, TimeoutError,
+  OSError all produce valid (degraded) results; mock provider unaffected.
+
+### 2. E3: Scoring-rule unit tests (46 tests)
+- `test_score_rules.py`: direct tests for `_score_rules()` covering
+  business email (+15), company size tiers, seniority tiers, title-inflation
+  discount (vp/c_level at smb), intent signals (extracted + keyword fallback),
+  spam suppression, opt-out/legal hard disqualifiers, free-email cap (69),
+  industry bonus, existing-customer boost, intent gate (firmographics without
+  intent capped at cold), injection flag consumed, and full ScoreLeadTool
+  hot/disqualified/hard-override paths.
+
+### 3. C1: Website-fallback docs aligned with code
+- `skip_website=True` is the intended behavior for demo (avoids latency +
+  external fetches). Updated FRONTIER.md and DECISION.md to document the
+  fallback as "built but disabled by default" with instructions to re-enable.
+  No code change — docs now match code.
+
+### 4. C5: injection_flagged consumed
+- `score_lead.py`: when `enrichment["injection_flagged"]` is True, LLM
+  adjustment is skipped (`llm_adjustment=0`, `llm_reason="skipped:
+  injection_flagged"`). Flag is surfaced in score output for trace visibility.
+- Previously: injection was detected, logged, and stored but never consumed
+  by scoring. Now: detection → action (LLM adjustment blocked).
+
+### Final state
+- **455 tests green** (405 existing + 46 scoring + 4 degradation)
+- **Mock eval gate: 5/5**
+- All existing tests unaffected (no regressions)
