@@ -23,7 +23,7 @@ except ImportError:
 pytestmark = pytest.mark.skipif(not _HAS_PSYCOPG, reason="psycopg not installed")
 
 
-def _make_store():
+def _make_store(*, pre_applied_migrations: list[str] | None = None):
     """Create a PostgresTraceStore with a fully mocked psycopg.connect."""
     with patch("gtm_triage.trace.pg_store.psycopg") as mock_psycopg:
         mock_conn = MagicMock()
@@ -32,8 +32,9 @@ def _make_store():
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
         mock_psycopg.connect.return_value = mock_conn
 
-        # Migration version check returns empty (no migrations applied yet)
-        mock_cursor.fetchall.return_value = []
+        # Migration version check — return dict-row format (matches real dict_row cursor)
+        applied = pre_applied_migrations or []
+        mock_cursor.fetchall.return_value = [{"version": v} for v in applied]
 
         from gtm_triage.trace.pg_store import PostgresTraceStore
         store = PostgresTraceStore("postgresql://test:test@localhost/test")
@@ -47,6 +48,59 @@ def _make_store():
         mock_conn.reset_mock()
 
         return store, mock_conn, mock_cursor
+
+
+class TestMigrations:
+    def test_migration_with_dict_row_cursor(self):
+        """Regression: row["version"] not row[0] — dict_row cursor returns dicts."""
+        # Pre-apply 001 so the migration loop must parse dict-row format
+        store, conn, cur = _make_store(pre_applied_migrations=["001_create_tables"])
+        # Store created successfully — no KeyError on row["version"]
+        assert store is not None
+
+    def test_fresh_migration_applies_all(self):
+        """No pre-applied migrations — both 001 and 002 should run."""
+        with patch("gtm_triage.trace.pg_store.psycopg") as mock_psycopg:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+            mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+            mock_psycopg.connect.return_value = mock_conn
+            mock_cursor.fetchall.return_value = []  # no migrations applied
+
+            from gtm_triage.trace.pg_store import PostgresTraceStore
+            store = PostgresTraceStore("postgresql://test:test@localhost/test")
+
+            # Should have inserted both migration versions
+            insert_calls = [
+                c for c in mock_cursor.execute.call_args_list
+                if len(c[0]) >= 1 and "INSERT INTO schema_migrations" in str(c[0][0])
+            ]
+            assert len(insert_calls) == 2
+            versions_inserted = [c[0][1][0] for c in insert_calls]
+            assert "001_create_tables" in versions_inserted
+            assert "002_outcomes" in versions_inserted
+
+    def test_partial_migration_applies_remaining(self):
+        """001 already applied — only 002 should run."""
+        with patch("gtm_triage.trace.pg_store.psycopg") as mock_psycopg:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+            mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+            mock_psycopg.connect.return_value = mock_conn
+            # 001 already applied (dict-row format!)
+            mock_cursor.fetchall.return_value = [{"version": "001_create_tables"}]
+
+            from gtm_triage.trace.pg_store import PostgresTraceStore
+            store = PostgresTraceStore("postgresql://test:test@localhost/test")
+
+            insert_calls = [
+                c for c in mock_cursor.execute.call_args_list
+                if len(c[0]) >= 1 and "INSERT INTO schema_migrations" in str(c[0][0])
+            ]
+            assert len(insert_calls) == 1
+            assert insert_calls[0][0][1][0] == "002_outcomes"
 
 
 class TestWrite:
@@ -243,3 +297,42 @@ class TestGetResultByRunId:
         result = store.get_result_by_run_id("run-2")
         assert result is not None
         assert result["tier"] == "cold"
+
+
+class TestWriteReadRoundTrip:
+    """Verify write → read round-trips with dict-row shaped mocks."""
+
+    def test_write_then_get_events(self):
+        store, conn, cur = _make_store()
+
+        # Write
+        event_id = store.write(
+            run_id="run-rt",
+            event_type="run_start",
+            agent="loop_agent",
+            payload={"lead": {"email": "rt@test.com"}},
+        )
+        assert event_id
+
+        # Mock the read to return what write would have inserted
+        from datetime import datetime, timezone
+        cur.fetchall.return_value = [
+            {
+                "event_id": event_id,
+                "run_id": "run-rt",
+                "event_type": "run_start",
+                "agent": "loop_agent",
+                "payload": {"lead": {"email": "rt@test.com"}},
+                "error": None,
+                "input_tokens": None,
+                "output_tokens": None,
+                "duration_ms": None,
+                "created_at": datetime.now(timezone.utc),
+            }
+        ]
+
+        events = store.get_run_events("run-rt")
+        assert len(events) == 1
+        assert events[0]["run_id"] == "run-rt"
+        assert events[0]["payload"]["lead"]["email"] == "rt@test.com"
+        assert isinstance(events[0]["created_at"], str)  # ISO format

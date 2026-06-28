@@ -448,3 +448,29 @@ Closes the verified top-5 from the reconciled audit before deploy.
 **Vercel dashboard:**
 - `NEXT_PUBLIC_API_URL=https://<render-url>`
 - `NEXT_PUBLIC_GTM_API_KEY=demo-<same-key-as-Render>`
+
+## 2026-06-27 — Phase M: Postgres migration dict-row fix
+
+### Bug
+`pg_store.py:79` used `row[0]` to read applied migration versions, but all
+connections use `dict_row` factory. On real Neon Postgres, `row[0]` raises
+`KeyError: 0` — the row is a dict, not a tuple. Startup crash on deploy.
+
+Slipped through because existing tests mocked `fetchall.return_value = []`
+(empty list → set comprehension never iterates → bug never triggered).
+
+### Fix
+- `pg_store.py:79`: `row[0]` → `row["version"]` (the actual column name).
+- Audited entire file for other integer-indexed access — none found (all other
+  access already uses `row["column_name"]`).
+- `psycopg_pool` already in `requirements.txt` (added in Phase M close-out).
+
+### Tests (4 new)
+- `test_migration_with_dict_row_cursor`: pre-applied migration in dict format —
+  regression test for the exact bug.
+- `test_fresh_migration_applies_all`: verifies both 001 + 002 are inserted.
+- `test_partial_migration_applies_remaining`: 001 pre-applied → only 002 runs.
+- `test_write_then_get_events`: write → read round-trip with dict-row mocks.
+
+### Final state
+- **459 tests green**, mock eval gate 5/5

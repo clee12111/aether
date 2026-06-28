@@ -76,7 +76,7 @@ def _run_migrations(conn: psycopg.Connection) -> None:
         conn.commit()
 
         cur.execute("SELECT version FROM schema_migrations")
-        applied = {row[0] for row in cur.fetchall()}
+        applied = {row["version"] for row in cur.fetchall()}
 
     for version, sql in _MIGRATIONS:
         if version not in applied:
