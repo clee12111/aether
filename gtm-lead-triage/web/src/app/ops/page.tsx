@@ -468,7 +468,7 @@ export default function OpsDashboard() {
                     <span className="text-stone-300 font-sans cursor-default" title="HubSpot backend not active">HubSpot</span>
                   )}
                 </div>
-                <p className="text-[10px] text-stone-300 mt-1.5">Langfuse and HubSpot links open the operator&apos;s account — in production, these connect to your team&apos;s dashboards.</p>
+                <p className="text-[10px] text-stone-400 mt-1.5 font-semibold">Langfuse and HubSpot links open the operator&apos;s account — in production, these connect to your team&apos;s dashboards.</p>
               </div>
 
               {/* Draft outreach — full width */}
