@@ -226,3 +226,49 @@ class TestCORS:
         from gtm_triage import api
         source = inspect.getsource(api)
         assert 'allow_methods=["GET", "POST", "DELETE"]' in source
+
+    def test_cors_headers_on_auth_error(self):
+        """CORS headers must appear on 401 responses, not just 200s.
+
+        Regression: if CORSMiddleware is inside AuthMiddleware (wrong order),
+        auth errors (401/503) lack access-control-allow-origin and the browser
+        shows 'Failed to fetch' instead of the real error.
+        """
+        import os
+        from starlette.testclient import TestClient
+        from gtm_triage.api import app
+
+        origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000").split(",")[0].strip()
+
+        # POST without API key → should get 401 WITH CORS headers
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/triage",
+                json={"name": "X", "email": "x@y.com", "company": "Z", "message": "hi"},
+                headers={"Origin": origin},
+            )
+            # The status depends on auth config, but CORS header must be present
+            assert "access-control-allow-origin" in resp.headers, (
+                f"CORS header missing on {resp.status_code} response — "
+                "CORSMiddleware must be outermost (added last)"
+            )
+
+    def test_cors_preflight_returns_200(self):
+        """OPTIONS preflight must return 200 with CORS headers."""
+        import os
+        from starlette.testclient import TestClient
+        from gtm_triage.api import app
+
+        origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000").split(",")[0].strip()
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.options(
+                "/triage",
+                headers={
+                    "Origin": origin,
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "content-type,x-api-key",
+                },
+            )
+            assert resp.status_code == 200
+            assert resp.headers.get("access-control-allow-origin") == origin

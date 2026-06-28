@@ -222,19 +222,24 @@ _cors_origins = [
     os.environ.get("FRONTEND_ORIGIN", os.environ.get("CORS_ORIGINS", "http://localhost:3000")).split(",")
     if o.strip()
 ]
+
+# Middleware execution order is OUTSIDE-IN (last-added runs first).
+# CORS must be outermost so it adds headers to ALL responses — including
+# auth rejections (401), rate-limit (429), and exceptions (500).
+# Without this, the browser can't read error responses and shows "Failed to fetch".
+#
+# Execution order: CORS → RequestId → Auth → RateLimit → SizeLimit → Metrics → app
+app.add_middleware(MetricsMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(AuthMiddleware)
+app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "X-API-Key", "Content-Type"],
 )
-
-# Execution order (inside-out): RequestId → Auth → RateLimit → SizeLimit → Metrics
-app.add_middleware(MetricsMiddleware)
-app.add_middleware(RequestSizeLimitMiddleware)
-app.add_middleware(RateLimitMiddleware)
-app.add_middleware(AuthMiddleware)
-app.add_middleware(RequestIdMiddleware)
 
 # Global exception handler — no stack leaks
 app.add_exception_handler(Exception, global_exception_handler)

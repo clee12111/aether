@@ -491,3 +491,49 @@ correct CORS headers.
 
 ### Final state
 - **459 tests green**
+
+## 2026-06-28 — CORS headers missing on error responses ("Failed to fetch")
+
+### Bug
+The deployed site loaded fine but every form submit showed "Failed to fetch."
+The browser completed the OPTIONS preflight (200 + CORS headers) but the
+actual POST got a 401 (or 503) **without `access-control-allow-origin`**.
+Browsers refuse to let JS read responses without CORS headers, regardless of
+status code → "Failed to fetch" instead of the real error.
+
+### Root cause
+Starlette middleware runs outside-in (last-added first). `CORSMiddleware` was
+added FIRST (innermost), `AuthMiddleware` was added LATER (outermost). Auth
+returned 401 before the request ever reached CORS → no CORS headers on the
+response.
+
+```
+BEFORE (broken):  Auth → RateLimit → ... → CORS → app
+                  Auth returns 401 here ↑ — CORS never runs
+
+AFTER (fixed):    CORS → RequestId → Auth → RateLimit → ... → app
+                  CORS wraps everything ↑ — adds headers to ALL responses
+```
+
+### Fix
+`api.py`: moved `app.add_middleware(CORSMiddleware, ...)` to be added LAST
+so it's the outermost middleware. Now CORS headers appear on 200s, 401s,
+429s, 500s — every response.
+
+### Diagnosis method
+```bash
+# Preflight: 200 + CORS headers (was already working)
+curl -D - -X OPTIONS -H "Origin: https://aether-c7bg.vercel.app" ...
+
+# Real POST: 401 WITHOUT access-control-allow-origin (the bug)
+curl -D - -X POST -H "Origin: https://aether-c7bg.vercel.app" ...
+# → no access-control-allow-origin header → browser blocks → "Failed to fetch"
+```
+
+### Tests added
+- `test_cors_headers_on_auth_error`: POST without key → asserts
+  `access-control-allow-origin` header is present on the error response.
+- `test_cors_preflight_returns_200`: OPTIONS → asserts 200 + correct origin.
+
+### Final state
+- **461 tests green**
