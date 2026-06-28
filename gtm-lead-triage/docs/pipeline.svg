@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" font-family="-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="596" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text x="40" y="44" font-size="22" font-weight="600" fill="#0f172a">GTM Lead-Triage — Agentic Pipeline</text>
+  <text x="40" y="68" font-size="13.5" fill="#64748b">A reason-act-observe brain (validated on FinQA) wired into the GTM SaaS stack, with every step traced</text>
+  <text x="1160" y="44" font-size="12" fill="#4f46e5" text-anchor="end">aether-c7bg.vercel.app</text>
+
+  <!-- INBOUND -->
+  <text x="105" y="120" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle" letter-spacing="1">INBOUND</text>
+  <rect x="30" y="136" width="150" height="40" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="105" y="161" font-size="13" fill="#334155" text-anchor="middle">Web form / API</text>
+  <rect x="30" y="184" width="150" height="40" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="105" y="209" font-size="13" fill="#334155" text-anchor="middle">Email / chat</text>
+  <text x="105" y="246" font-size="10" font-style="italic" fill="#94a3b8" text-anchor="middle">company optional —</text>
+  <text x="105" y="259" font-size="10" font-style="italic" fill="#94a3b8" text-anchor="middle">derived from domain</text>
+
+  <line x1="182" y1="180" x2="236" y2="180" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="208" y="172" font-size="10" fill="#64748b" text-anchor="middle">/triage</text>
+
+  <!-- THE BRAIN -->
+  <rect x="240" y="96" width="340" height="276" rx="14" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+  <text x="410" y="124" font-size="16" font-weight="600" fill="#3730a3" text-anchor="middle">Agent Brain</text>
+  <text x="410" y="143" font-size="12" fill="#6366f1" text-anchor="middle">reason → act → observe (one tool per step)</text>
+
+  <rect x="288" y="158" width="244" height="28" rx="14" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="410" y="177" font-size="12.5" fill="#3730a3" text-anchor="middle">1 · Extract role + intent (LLM)</text>
+  <line x1="410" y1="186" x2="410" y2="192" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="288" y="194" width="244" height="28" rx="14" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="410" y="213" font-size="12.5" fill="#3730a3" text-anchor="middle">2 · CRM lookup</text>
+  <line x1="410" y1="222" x2="410" y2="228" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="288" y="230" width="244" height="28" rx="14" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="410" y="249" font-size="12.5" fill="#3730a3" text-anchor="middle">3 · Enrich (firmographics)</text>
+  <line x1="410" y1="258" x2="410" y2="264" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="288" y="266" width="244" height="28" rx="14" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="410" y="285" font-size="12.5" fill="#3730a3" text-anchor="middle">4 · Score + route (rules + LLM nudge)</text>
+  <line x1="410" y1="294" x2="410" y2="300" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="288" y="302" width="244" height="28" rx="14" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="410" y="321" font-size="12.5" fill="#3730a3" text-anchor="middle">5 · Draft outreach (never sends)</text>
+
+  <text x="410" y="352" font-size="10.5" fill="#6366f1" text-anchor="middle">deterministic scorer + bounded LLM · grounded · refuses to fabricate</text>
+  <text x="410" y="366" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">same RAO loop validated on FinQA (financial-reasoning benchmark)</text>
+
+  <!-- BRAIN -> ROUTE -->
+  <line x1="582" y1="180" x2="638" y2="180" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="610" y="172" font-size="10" fill="#64748b" text-anchor="middle">tier + route</text>
+
+  <!-- ROUTE -->
+  <text x="800" y="120" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle" letter-spacing="1">ROUTE TO GTM TEAM</text>
+  <rect x="640" y="136" width="320" height="40" rx="8" fill="#fee2e2" stroke="#fca5a5"/>
+  <text x="658" y="161" font-size="13" font-weight="600" fill="#b91c1c">Hot → Account Executive</text>
+  <text x="942" y="161" font-size="11" fill="#dc2626" text-anchor="end">now</text>
+  <rect x="640" y="184" width="320" height="40" rx="8" fill="#fef3c7" stroke="#fcd34d"/>
+  <text x="658" y="209" font-size="13" font-weight="600" fill="#b45309">Warm → SDR sequence</text>
+  <text x="942" y="209" font-size="11" fill="#d97706" text-anchor="end">nurture</text>
+  <rect x="640" y="232" width="320" height="40" rx="8" fill="#dbeafe" stroke="#93c5fd"/>
+  <text x="658" y="257" font-size="13" font-weight="600" fill="#1d4ed8">Cold → Marketing nurture</text>
+  <text x="942" y="257" font-size="11" fill="#2563eb" text-anchor="end">drip</text>
+  <rect x="640" y="280" width="320" height="40" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+  <text x="658" y="305" font-size="13" font-weight="600" fill="#6b7280">Disqualified → Drop</text>
+
+  <!-- OPS DASHBOARD -->
+  <rect x="990" y="136" width="170" height="184" rx="10" fill="#f5f3ff" stroke="#8b5cf6"/>
+  <text x="1075" y="162" font-size="13" font-weight="600" fill="#6d28d9" text-anchor="middle">Ops dashboard</text>
+  <text x="1075" y="184" font-size="10.5" fill="#7c3aed" text-anchor="middle">live lead list</text>
+  <text x="1075" y="201" font-size="10.5" fill="#7c3aed" text-anchor="middle">score breakdown</text>
+  <text x="1075" y="218" font-size="10.5" fill="#7c3aed" text-anchor="middle">draft + enrichment</text>
+  <text x="1075" y="235" font-size="10.5" fill="#7c3aed" text-anchor="middle">full RAO trace</text>
+  <text x="1075" y="252" font-size="10.5" fill="#7c3aed" text-anchor="middle">Langfuse / HubSpot</text>
+  <text x="1075" y="269" font-size="10.5" fill="#7c3aed" text-anchor="middle">deep links</text>
+  <line x1="962" y1="200" x2="988" y2="200" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- INTEGRATED SAAS STACK -->
+  <text x="600" y="424" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle" letter-spacing="1">INTEGRATED GTM SAAS STACK</text>
+  <line x1="320" y1="372" x2="320" y2="446" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="320" y="408" font-size="10" fill="#64748b" text-anchor="middle">enrich</text>
+  <line x1="430" y1="372" x2="430" y2="446" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="430" y="408" font-size="10" fill="#64748b" text-anchor="middle">write contact</text>
+  <line x1="560" y1="372" x2="560" y2="446" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="560" y="408" font-size="10" fill="#64748b" text-anchor="middle">trace step</text>
+
+  <rect x="240" y="448" width="150" height="56" rx="10" fill="#f0fdfa" stroke="#14b8a6"/>
+  <text x="315" y="472" font-size="13" font-weight="600" fill="#0f766e" text-anchor="middle">PDL</text>
+  <text x="315" y="490" font-size="10" fill="#14b8a6" text-anchor="middle">enrichment (firmographics)</text>
+  <rect x="404" y="448" width="150" height="56" rx="10" fill="#fff7ed" stroke="#f97316"/>
+  <text x="479" y="472" font-size="13" font-weight="600" fill="#c2410c" text-anchor="middle">HubSpot</text>
+  <text x="479" y="490" font-size="10" fill="#f97316" text-anchor="middle">CRM · system of record</text>
+  <rect x="568" y="448" width="150" height="56" rx="10" fill="#f5f3ff" stroke="#8b5cf6"/>
+  <text x="643" y="472" font-size="13" font-weight="600" fill="#6d28d9" text-anchor="middle">Langfuse</text>
+  <text x="643" y="490" font-size="10" fill="#8b5cf6" text-anchor="middle">tracing · tokens · cost</text>
+  <rect x="732" y="448" width="160" height="56" rx="10" fill="#eff6ff" stroke="#3b82f6"/>
+  <text x="812" y="472" font-size="13" font-weight="600" fill="#1d4ed8" text-anchor="middle">Postgres (Neon)</text>
+  <text x="812" y="490" font-size="10" fill="#3b82f6" text-anchor="middle">trace store · idempotency</text>
+
+  <!-- FOOTER -->
+  <line x1="40" y1="528" x2="1160" y2="528" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="40" y="540" width="12" height="12" rx="3" fill="#eef2ff" stroke="#4f46e5"/>
+  <text x="58" y="550" font-size="12" fill="#475569">Built: the brain — agent + eval + trace</text>
+  <rect x="320" y="540" width="12" height="12" rx="3" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="338" y="550" font-size="12" fill="#475569">Integrated: HubSpot · PDL · Langfuse</text>
+  <text x="40" y="574" font-size="12" fill="#64748b">Swappable behind one interface each: CRM (HubSpot ↔ Salesforce) · enrichment (PDL ↔ Apollo) · model (OpenAI ↔ Anthropic) — one adapter + an env var</text>
+</svg>
