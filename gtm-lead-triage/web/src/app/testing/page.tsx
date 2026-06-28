@@ -125,6 +125,7 @@ export default function TestingPage() {
   const [sortMode, setSortMode] = useState<SortMode>("tier");
 
   const fetchRuns = useCallback(async () => {
+    setLoading(true);
     try {
       setFetchError("");
       setRuns(await apiGet<RunSummary[]>("/runs?limit=50"));
@@ -134,7 +135,9 @@ export default function TestingPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchRuns(); }, [fetchRuns]);
+  // Fetch on every mount (including client-side navigation)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchRuns(); }, []);
 
   async function loadJourney(email: string) {
     setSelectedEmail(email); setJourney(null); setDomainCampaign(null); setJLoading(true);

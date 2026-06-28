@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { Lead, TIER_BADGE, TIER_DOT, CHANNEL_DOT, DraftVariant, factLabel } from "@/lib/tokens";
@@ -34,7 +34,6 @@ export default function OutboundPage() {
   const [campaignLoading, setCampaignLoading] = useState(false);
   const [modalCampaign, setModalCampaign] = useState({ name: "", icp_keywords: "", target_persona: "Head of Product", value_prop: "centralize scattered customer feedback and tie it to roadmap decisions" });
   const [sortMode, setSortMode] = useState<SortMode>("tier");
-  const loadedRef = useRef(false);
 
   const defaultCampaign = { name: "Productboard ICP", value_prop: "centralize scattered customer feedback and tie it to roadmap decisions", icp_keywords: ["product management", "saas", "customer feedback"], target_persona: "Head of Product" };
 
@@ -76,7 +75,7 @@ export default function OutboundPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { if (!loadedRef.current) { loadedRef.current = true; fetchData(); } }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   // Group leads by company domain
   const accounts: Account[] = (() => {
