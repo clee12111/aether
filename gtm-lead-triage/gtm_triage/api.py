@@ -157,7 +157,7 @@ async def _lifespan(app: FastAPI):
     trace_path = os.environ.get("GTM_TRACE_DB", "gtm_trace.db")
 
     if crm_backend == "hubspot":
-        token = os.environ.get("HUBSPOT_TOKEN", "")
+        token = os.environ.get("HUBSPOT_TOKEN", "").strip()
         if not token:
             raise RuntimeError("CRM_BACKEND=hubspot requires HUBSPOT_TOKEN env var")
         _crm = HubSpotCRM(token)

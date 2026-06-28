@@ -96,9 +96,13 @@ class HubSpotCRM(CRMStore):
             props["email"] = email
             resp = self._client.post("/crm/v3/objects/contacts", json={"properties": props})
             if not resp.is_success:
+                try:
+                    err_body = resp.json()
+                except Exception:
+                    err_body = resp.text
                 logger.error(
-                    "HubSpot POST /contacts failed: %d %s | props=%s",
-                    resp.status_code, resp.text, props,
+                    "HubSpot POST /contacts failed: %d body=%s | props=%s",
+                    resp.status_code, err_body, props,
                 )
             resp.raise_for_status()
 
