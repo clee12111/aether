@@ -460,14 +460,15 @@ export default function OpsDashboard() {
                   <span className="text-zinc-300">|</span>
                   <span>{selectedRun.run_id.slice(0, 8)}</span>
                   {config?.langfuse_enabled && config.langfuse_host && (
-                    <a href={`${config.langfuse_host}/traces?search=triage-${selectedRun.run_id.slice(0, 8)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-700 font-sans font-medium">Langfuse</a>
+                    <span className="text-zinc-400 font-sans cursor-default" title="Langfuse traces are linked to the operator's account — in production, this opens your team's Langfuse dashboard">Langfuse</span>
                   )}
                   {config?.crm_backend === "hubspot" ? (
-                    <a href={`https://app.hubspot.com/contacts/search?query=${encodeURIComponent(selectedEmail)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-700 font-sans font-medium">HubSpot</a>
+                    <span className="text-zinc-400 font-sans cursor-default" title="HubSpot contacts are linked to the operator's account — in production, this opens your team's HubSpot dashboard">HubSpot</span>
                   ) : (
                     <span className="text-zinc-300 font-sans cursor-default" title="HubSpot backend not active">HubSpot</span>
                   )}
                 </div>
+                <p className="text-[10px] text-zinc-300 mt-1.5">Langfuse and HubSpot links open the operator&apos;s account — in production, these connect to your team&apos;s dashboards.</p>
               </div>
 
               {/* Draft outreach — full width */}
