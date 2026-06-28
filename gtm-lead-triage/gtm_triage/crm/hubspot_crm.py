@@ -22,7 +22,11 @@ from typing import Any
 
 import httpx
 
+import logging
+
 from gtm_triage.crm.base import CRMStore
+
+logger = logging.getLogger(__name__)
 
 _BASE = "https://api.hubapi.com"
 
@@ -82,10 +86,20 @@ class HubSpotCRM(CRMStore):
         if contact is not None:
             cid = contact["id"]
             resp = self._client.patch(f"/crm/v3/objects/contacts/{cid}", json={"properties": props})
+            if not resp.is_success:
+                logger.error(
+                    "HubSpot PATCH /contacts/%s failed: %d %s",
+                    cid, resp.status_code, resp.text,
+                )
             resp.raise_for_status()
         else:
             props["email"] = email
             resp = self._client.post("/crm/v3/objects/contacts", json={"properties": props})
+            if not resp.is_success:
+                logger.error(
+                    "HubSpot POST /contacts failed: %d %s | props=%s",
+                    resp.status_code, resp.text, props,
+                )
             resp.raise_for_status()
 
     def add_activity(self, email: str, activity: dict[str, Any]) -> dict[str, Any] | None:
@@ -110,6 +124,11 @@ class HubSpotCRM(CRMStore):
             f"/crm/v3/objects/contacts/{cid}",
             json={"properties": {"gtm_activity_log": updated}},
         )
+        if not resp.is_success:
+            logger.error(
+                "HubSpot PATCH activity for %s failed: %d %s",
+                cid, resp.status_code, resp.text,
+            )
         resp.raise_for_status()
         return None  # new activity recorded
 
