@@ -54,6 +54,25 @@ class TraceStoreProtocol(Protocol):
 
     def get_result_by_run_id(self, run_id: str) -> dict[str, Any] | None: ...
 
+    # ── Health check ────────────────────────────────────────────────────
+
+    def ping(self) -> bool: ...
+
+    # ── Right to erasure ───────────────────────────────────────────────
+
+    def delete_by_email(self, email: str) -> int: ...
+
+    # ── Outcome loop ───────────────────────────────────────────────────
+
+    def record_outcome(
+        self, run_id: str, predicted_tier: str, actual_outcome: str,
+        recorded_by: str = "",
+    ) -> str: ...
+
+    def get_outcome(self, run_id: str) -> dict[str, Any] | None: ...
+
+    def get_outcome_metrics(self) -> dict[str, dict[str, Any]]: ...
+
     # ── Lifecycle ───────────────────────────────────────────────────────
 
     def close(self) -> None: ...

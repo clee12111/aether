@@ -50,6 +50,17 @@ _MIGRATIONS: list[tuple[str, str]] = [
             count      INTEGER NOT NULL DEFAULT 0
         );
     """),
+    ("002_outcomes", """
+        CREATE TABLE IF NOT EXISTS outcomes (
+            outcome_id     TEXT PRIMARY KEY,
+            run_id         TEXT NOT NULL,
+            predicted_tier TEXT NOT NULL,
+            actual_outcome TEXT NOT NULL,
+            recorded_by    TEXT,
+            recorded_at    TIMESTAMPTZ NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_outcomes_run ON outcomes(run_id);
+    """),
 ]
 
 
@@ -307,6 +318,108 @@ class PostgresTraceStore:
         if isinstance(result, str):
             result = json.loads(result)
         return result
+
+    # ── Right to erasure ─────────────────────────────────────────────────
+
+    def delete_by_email(self, email: str) -> int:
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT DISTINCT run_id FROM trace_events "
+                    "WHERE event_type = 'run_start' AND payload::text LIKE %s",
+                    (f'%"email": "{email}"%',),
+                )
+                rows = cur.fetchall()
+                run_ids = [r["run_id"] for r in rows]
+                if not run_ids:
+                    return 0
+                placeholders = ",".join(["%s"] * len(run_ids))
+                cur.execute(f"DELETE FROM trace_events WHERE run_id IN ({placeholders})", run_ids)
+                cur.execute(f"DELETE FROM idempotency_keys WHERE run_id IN ({placeholders})", run_ids)
+            conn.commit()
+        return len(run_ids)
+
+    # ── Health check ──────────────────────────────────────────────────────
+
+    def ping(self) -> bool:
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            return True
+        except Exception:
+            return False
+
+    # ── Outcome loop (K7 stub) ─────────────────────────────────────────
+
+    def record_outcome(
+        self,
+        run_id: str,
+        predicted_tier: str,
+        actual_outcome: str,
+        recorded_by: str = "",
+    ) -> str:
+        import uuid as _uuid
+        from datetime import datetime, timezone
+        outcome_id = str(_uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO outcomes (outcome_id, run_id, predicted_tier, actual_outcome, recorded_by, recorded_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (outcome_id, run_id, predicted_tier, actual_outcome, recorded_by or "", now),
+                )
+            conn.commit()
+        return outcome_id
+
+    def get_outcome(self, run_id: str) -> dict[str, Any] | None:
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM outcomes WHERE run_id = %s", (run_id,))
+                row = cur.fetchone()
+        return dict(row) if row else None
+
+    def get_outcome_metrics(self) -> dict[str, dict[str, Any]]:
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT run_id, result FROM idempotency_keys")
+                pred_rows = cur.fetchall()
+
+        tier_counts: dict[str, dict[str, int]] = {}
+        for row in pred_rows:
+            result = row["result"]
+            if isinstance(result, str):
+                result = json.loads(result)
+            tier = result.get("final_tier", "unknown")
+            if tier not in tier_counts:
+                tier_counts[tier] = {"predicted": 0, "with_outcome": 0, "converted": 0}
+            tier_counts[tier]["predicted"] += 1
+
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT run_id, predicted_tier, actual_outcome FROM outcomes")
+                outcome_rows = cur.fetchall()
+
+        for row in outcome_rows:
+            tier = row["predicted_tier"]
+            if tier not in tier_counts:
+                tier_counts[tier] = {"predicted": 0, "with_outcome": 0, "converted": 0}
+            tier_counts[tier]["with_outcome"] += 1
+            if row["actual_outcome"] == "converted":
+                tier_counts[tier]["converted"] += 1
+
+        result_dict: dict[str, dict[str, Any]] = {}
+        for tier, counts in sorted(tier_counts.items()):
+            with_outcome = counts["with_outcome"]
+            converted = counts["converted"]
+            result_dict[tier] = {
+                "predicted": counts["predicted"],
+                "with_outcome": with_outcome,
+                "converted": converted,
+                "precision": round(converted / with_outcome, 4) if with_outcome > 0 else None,
+            }
+        return result_dict
 
     def close(self) -> None:
         if self._pool is not None:

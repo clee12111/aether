@@ -29,8 +29,13 @@ def _protocol_methods() -> list[str]:
 def _get_concrete_classes() -> list[type]:
     """Import and return both concrete store classes."""
     from gtm_triage.trace.store import TraceStore
-    from gtm_triage.trace.pg_store import PostgresTraceStore
-    return [TraceStore, PostgresTraceStore]
+    classes: list[type] = [TraceStore]
+    try:
+        from gtm_triage.trace.pg_store import PostgresTraceStore
+        classes.append(PostgresTraceStore)
+    except ImportError:
+        pass  # psycopg not installed — skip Postgres conformance
+    return classes
 
 
 _METHODS = _protocol_methods()
