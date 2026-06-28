@@ -537,3 +537,37 @@ curl -D - -X POST -H "Origin: https://aether-c7bg.vercel.app" ...
 
 ### Final state
 - **461 tests green**
+
+## 2026-06-28 — Frontend fetch timeout + cold-start UX
+
+### Problem
+"Failed to fetch" after ~5s. With CORS fixed, the real issue surfaced: the
+default `fetch()` has no timeout and no feedback. Real triage takes ~11s
+(OpenAI LLM), and Render free-tier cold-starts add 30-60s. The user stares
+at "Triaging..." with no indication of progress.
+
+Additionally, if `NEXT_PUBLIC_API_URL` isn't baked into the Vercel build
+(must redeploy after setting it), the frontend defaults to `localhost:8000`
+which silently fails with a network error after the browser's TCP timeout.
+
+### Diagnosis
+- `curl` to `/triage` with valid key completes in ~11s (200) — backend fine.
+- No `AbortController` or timeout in the frontend code — `fetch()` runs
+  until browser TCP timeout or success.
+- `console.log` added to surface the configured API URL in browser devtools.
+
+### Fixes (web/src/lib/api.ts + page.tsx)
+1. **60s explicit timeout** via `AbortController` — no more silent hangs.
+   Timeout error says "backend may be waking from cold start, try again."
+2. **Network error message** — catches fetch failures and says "check that
+   NEXT_PUBLIC_API_URL is set correctly" (the most common misconfiguration).
+3. **Console log on load** — `[GTM] API → https://...` so misconfig is
+   immediately visible in browser devtools.
+4. **Warmup ping on page load** — fires `GET /ready` on mount so Render
+   wakes while the user fills out the form.
+5. **Progressive loading messages** — "Triaging..." (0-3s) → "Analyzing
+   lead — this can take ~15s" (3-15s) → "Still working — backend may be
+   waking from cold start" (15s+).
+
+### Final state
+- **461 tests green**, frontend build clean

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { apiPost } from "@/lib/api";
+import { apiPost, warmup } from "@/lib/api";
 
 interface TriageResult {
   run_id: string;
@@ -109,19 +109,31 @@ export default function LeadForm() {
   const [form, setForm] = useState({ name: "", email: "", company: "", message: "" });
   const [result, setResult] = useState<TriageResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("Triaging...");
   const [error, setError] = useState("");
+
+  // Warmup: wake Render backend on page load so it's ready when user submits
+  useEffect(() => { warmup(); }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setLoadingMsg("Triaging...");
     setError("");
     setResult(null);
+
+    // Progressive loading messages for slow paths (LLM ~10s, cold start ~30s)
+    const t1 = setTimeout(() => setLoadingMsg("Analyzing lead — this can take ~15s..."), 3_000);
+    const t2 = setTimeout(() => setLoadingMsg("Still working — backend may be waking from cold start..."), 15_000);
+
     try {
       const res = await apiPost<TriageResult>("/triage", form);
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reach the server. Is the API running?");
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
       setLoading(false);
     }
   }
@@ -201,7 +213,7 @@ export default function LeadForm() {
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
                       <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Triaging...
+                      {loadingMsg}
                     </span>
                   ) : (
                     "Submit"
