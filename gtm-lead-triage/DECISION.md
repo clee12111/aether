@@ -753,3 +753,25 @@ for CRM contacts that predate the trace store.
 
 ### Final state
 - **482 passed, 6 skipped**
+
+## 2026-06-28 — Phase N6: Ops board UI polish
+
+### Changes (frontend-only, no backend/data logic)
+- **Detail panel full-width**: removed `max-w-3xl` centering constraint. Cards
+  span the full detail area.
+- **2-up responsive grid**: Score and Enrichment cards side by side on wide
+  screens (`grid-cols-1 md:grid-cols-2`), stacked on narrow. Draft Outreach
+  and Triage Trace remain full-width.
+- **Sort control**: dropdown in the filter bar — "Score (high first)" (default)
+  or "Most recent" (preserves API order).
+- **Tier filter chips**: already worked (Phase D), cleaned up styling —
+  `rounded-md`, tighter padding, active state with filled background.
+- **Sidebar**: fixed 320px, selected lead gets a left indigo border accent.
+- **Tighter spacing**: reduced padding throughout (p-6→p-5, py-3.5→py-3),
+  consistent card headers (uppercase tracking-wide), score reason shown inline
+  in a bordered section.
+- **Section headers**: "Draft Outreach", "Score", "Enrichment", "Triage trace"
+  all use consistent `text-xs font-semibold uppercase tracking-wide` style.
+
+### Final state
+- **482 passed, 6 skipped**, frontend build clean, mock gate 5/5

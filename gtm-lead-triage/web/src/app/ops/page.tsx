@@ -80,6 +80,8 @@ interface AppConfig {
   remaining: number;
 }
 
+type SortKey = "score" | "recent";
+
 /* ── Design tokens ──────────────────────────────────────────────────────── */
 
 const TIER_DOT: Record<string, string> = {
@@ -104,14 +106,6 @@ const ROUTE_LABEL: Record<string, string> = {
 };
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
-
-function timeAgo(iso: string): string {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
 
 // Group flat events into RAO phases
 interface Phase {
@@ -145,29 +139,25 @@ function groupIntoPhases(events: RunDetail["events"]): Phase[] {
       phases.push(current);
       continue;
     }
-    // llm_call, tool_response nest under current phase
     if (current) {
       current.events.push(e);
     } else {
-      // orphan llm_call (agent reasoning before first tool)
       phases.push({ name: "Agent Reasoning", tool: "", events: [e] });
     }
   }
   return phases;
 }
 
-// (triage_result is now served directly on the /runs/{id} response)
-
 /* ── Skeleton ────────────────────────────────────────────────────────────── */
 
 function LeadSkeleton() {
   return (
-    <div className="px-5 py-4 border-b border-zinc-100">
+    <div className="px-4 py-3 border-b border-zinc-100">
       <div className="flex items-center justify-between mb-2">
         <div className="skeleton h-4 w-36" />
         <div className="skeleton h-5 w-14 rounded-lg" />
       </div>
-      <div className="skeleton h-3 w-44 mb-1.5" />
+      <div className="skeleton h-3 w-44 mb-1" />
       <div className="skeleton h-3 w-28" />
     </div>
   );
@@ -175,7 +165,7 @@ function LeadSkeleton() {
 
 function DetailSkeleton() {
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-5 space-y-4">
       <div className="skeleton h-6 w-52 mb-2" />
       <div className="flex gap-3">
         <div className="skeleton h-5 w-20 rounded-lg" />
@@ -183,8 +173,11 @@ function DetailSkeleton() {
         <div className="skeleton h-5 w-24" />
       </div>
       <div className="skeleton h-24 w-full rounded-lg mt-4" />
-      <div className="skeleton h-16 w-full rounded-lg" />
-      <div className="space-y-3 mt-4">
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <div className="skeleton h-28 rounded-lg" />
+        <div className="skeleton h-28 rounded-lg" />
+      </div>
+      <div className="space-y-2 mt-4">
         {[1, 2, 3].map((i) => (
           <div key={i} className="skeleton h-10 w-full rounded-lg" />
         ))}
@@ -204,6 +197,7 @@ export default function OpsDashboard() {
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set());
   const [tierFilter, setTierFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("score");
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -238,7 +232,6 @@ export default function OpsDashboard() {
       } catch { setSelectedRun(null); }
       finally { setDetailLoading(false); }
     }
-    // No run_id — detail panel shows "no trace" state (handled in render)
   }
 
   function togglePhase(i: number) {
@@ -255,15 +248,20 @@ export default function OpsDashboard() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  // Filters
-  const filtered = leads.filter((l) => {
-    if (tierFilter && l.tier !== tierFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (l.name?.toLowerCase().includes(q) || l.email.toLowerCase().includes(q)) ?? false;
-    }
-    return true;
-  });
+  // Filter + sort
+  const filtered = leads
+    .filter((l) => {
+      if (tierFilter && l.tier !== tierFilter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return (l.name?.toLowerCase().includes(q) || l.email.toLowerCase().includes(q)) ?? false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "score") return (Number(b.score) || 0) - (Number(a.score) || 0);
+      return 0; // "recent" preserves API order (already sorted by lastmodifieddate desc)
+    });
 
   const tierCounts = leads.reduce<Record<string, number>>((acc, l) => {
     acc[l.tier || "unknown"] = (acc[l.tier || "unknown"] || 0) + 1;
@@ -278,7 +276,7 @@ export default function OpsDashboard() {
   return (
     <div className="flex flex-col min-h-[100dvh] h-[100dvh]">
       {/* Header */}
-      <header className="border-b border-zinc-200 bg-white px-6 py-3.5 flex items-center justify-between shrink-0">
+      <header className="border-b border-zinc-200 bg-white px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-zinc-900 flex items-center justify-center">
@@ -301,11 +299,11 @@ export default function OpsDashboard() {
         </Link>
       </header>
 
-      {/* Metric strip with filters */}
-      <div className="border-b border-zinc-200 bg-white px-6 py-2.5 flex items-center gap-3 text-xs shrink-0 overflow-x-auto">
+      {/* Filter bar */}
+      <div className="border-b border-zinc-200 bg-white px-6 py-2 flex items-center gap-2 text-xs shrink-0 overflow-x-auto">
         <button
           onClick={() => setTierFilter(null)}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors ${!tierFilter ? "bg-zinc-900 text-white" : "text-zinc-500 hover:bg-zinc-100"}`}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${!tierFilter ? "bg-zinc-900 text-white" : "text-zinc-500 hover:bg-zinc-100"}`}
         >
           All <span className="font-mono">{leads.length}</span>
         </button>
@@ -314,27 +312,38 @@ export default function OpsDashboard() {
           <button
             key={t}
             onClick={() => setTierFilter(tierFilter === t ? null : t)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors ${tierFilter === t ? "bg-zinc-900 text-white" : "text-zinc-500 hover:bg-zinc-100"}`}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${tierFilter === t ? "bg-zinc-900 text-white" : "text-zinc-500 hover:bg-zinc-100"}`}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${tierFilter === t ? "bg-white" : TIER_DOT[t]}`} />
             <span className="capitalize">{t}</span>
             <span className="font-mono">{tierCounts[t] || 0}</span>
           </button>
         ))}
-        <div className="ml-auto">
+
+        <div className="ml-auto flex items-center gap-2">
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+            className="px-2 py-1 text-xs bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-600/20 text-zinc-600"
+          >
+            <option value="score">Score (high first)</option>
+            <option value="recent">Most recent</option>
+          </select>
+          {/* Search */}
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search..."
-            className="w-36 px-2.5 py-1 text-xs bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-600/20 placeholder:text-zinc-400"
+            className="w-32 px-2.5 py-1 text-xs bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-600/20 placeholder:text-zinc-400"
           />
         </div>
       </div>
 
       {/* Main */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Lead list */}
-        <div className="w-80 lg:w-96 border-r border-zinc-200 bg-white overflow-y-auto shrink-0">
+        {/* Lead list — fixed width sidebar */}
+        <div className="w-80 border-r border-zinc-200 bg-white overflow-y-auto shrink-0">
           {loading && <><LeadSkeleton /><LeadSkeleton /><LeadSkeleton /></>}
           {!loading && filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -350,7 +359,7 @@ export default function OpsDashboard() {
             <button
               key={lead.email}
               onClick={() => selectLead(lead)}
-              className={`w-full text-left px-5 py-3.5 border-b border-zinc-100 transition-colors ${selectedEmail === lead.email ? "bg-indigo-50/50" : "hover:bg-zinc-50"}`}
+              className={`w-full text-left px-4 py-3 border-b border-zinc-100 transition-colors ${selectedEmail === lead.email ? "bg-indigo-50/50 border-l-2 border-l-indigo-500" : "hover:bg-zinc-50"}`}
             >
               <div className="flex items-center justify-between mb-0.5">
                 <span className="text-sm font-medium text-zinc-900 truncate pr-2">{lead.name || lead.email}</span>
@@ -359,7 +368,7 @@ export default function OpsDashboard() {
                     <span className="text-[10px] font-mono text-zinc-400">{lead.score}</span>
                   )}
                   {lead.tier && (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-lg font-semibold ${TIER_BADGE[lead.tier] || TIER_BADGE.cold}`}>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${TIER_BADGE[lead.tier] || TIER_BADGE.cold}`}>
                       {lead.tier}
                     </span>
                   )}
@@ -371,7 +380,7 @@ export default function OpsDashboard() {
           ))}
         </div>
 
-        {/* Detail panel */}
+        {/* Detail panel — fills remaining width */}
         <div className="flex-1 overflow-y-auto bg-zinc-50/50">
           {!selectedEmail && !detailLoading && (
             <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -391,13 +400,13 @@ export default function OpsDashboard() {
           )}
 
           {selectedRun && selectedLead && (
-            <div className="p-6 max-w-3xl space-y-5">
+            <div className="p-5 space-y-4">
               {/* Lead header */}
               <div>
                 <div className="flex items-start justify-between">
                   <div>
                     <h2 className="text-lg font-semibold tracking-tight text-zinc-900">{selectedLead.name || selectedEmail}</h2>
-                    <p className="text-xs text-zinc-400 mt-0.5">{selectedEmail}</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">{selectedEmail}{selectedLead.company ? ` · ${selectedLead.company}` : ""}</p>
                   </div>
                   {selectedLead.tier && (
                     <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${TIER_BADGE[selectedLead.tier] || ""}`}>
@@ -406,14 +415,14 @@ export default function OpsDashboard() {
                   )}
                 </div>
 
-                {/* Stats + deep links */}
-                <div className="flex items-center gap-3 mt-3 text-[10px] text-zinc-400 font-mono">
+                {/* Stats bar */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px] text-zinc-400 font-mono">
                   <span>{selectedRun.event_count} events</span>
                   {hasRealMetrics && (
                     <>
                       <span>{selectedRun.stats.llm_call_count} LLM calls</span>
                       <span>{selectedRun.stats.total_duration_ms}ms</span>
-                      <span>{selectedRun.stats.total_input_tokens + selectedRun.stats.total_output_tokens} tokens</span>
+                      <span>{selectedRun.stats.total_input_tokens + selectedRun.stats.total_output_tokens} tok</span>
                       <span>${selectedRun.stats.estimated_cost_usd.toFixed(4)}</span>
                     </>
                   )}
@@ -425,41 +434,24 @@ export default function OpsDashboard() {
                   <span className="text-zinc-300">|</span>
                   <span>{selectedRun.run_id.slice(0, 8)}</span>
                   {config?.langfuse_enabled && config.langfuse_host && (
-                    <a
-                      href={`${config.langfuse_host}/traces?search=triage-${selectedRun.run_id.slice(0, 8)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-600 hover:text-indigo-700 font-sans font-medium"
-                    >
-                      Langfuse
-                    </a>
+                    <a href={`${config.langfuse_host}/traces?search=triage-${selectedRun.run_id.slice(0, 8)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-700 font-sans font-medium">Langfuse</a>
                   )}
                   {config?.crm_backend === "hubspot" ? (
-                    <a
-                      href={`https://app.hubspot.com/contacts/search?query=${encodeURIComponent(selectedEmail)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-600 hover:text-indigo-700 font-sans font-medium"
-                    >
-                      HubSpot
-                    </a>
+                    <a href={`https://app.hubspot.com/contacts/search?query=${encodeURIComponent(selectedEmail)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-700 font-sans font-medium">HubSpot</a>
                   ) : (
                     <span className="text-zinc-300 font-sans cursor-default" title="HubSpot backend not active">HubSpot</span>
                   )}
                 </div>
               </div>
 
-              {/* Draft outreach card */}
+              {/* Draft outreach — full width */}
               {tr?.outreach?.subject && (
                 <div className="bg-white border border-zinc-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-semibold text-zinc-700">Draft Outreach</h3>
+                    <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Draft Outreach</h3>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">draft</span>
-                      <button
-                        onClick={() => copyDraft(tr.outreach?.body || "")}
-                        className="text-[10px] font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
-                      >
+                      <button onClick={() => copyDraft(tr.outreach?.body || "")} className="text-[10px] font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
                         {copied ? "Copied" : "Copy"}
                       </button>
                     </div>
@@ -469,16 +461,16 @@ export default function OpsDashboard() {
                 </div>
               )}
 
-              {/* Score + Enrichment cards */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Score + Enrichment — 2-up responsive grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {tr?.score && (
                   <div className="bg-white border border-zinc-200 rounded-lg p-4">
-                    <h3 className="text-xs font-semibold text-zinc-700 mb-2">Score</h3>
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-2xl font-bold text-zinc-900 font-mono">{tr.score.points ?? tr.score.rule_points}</span>
+                    <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Score</h3>
+                    <div className="flex items-baseline gap-2 mb-3">
+                      <span className="text-3xl font-bold text-zinc-900 font-mono">{tr.score.points ?? tr.score.rule_points}</span>
                       <span className="text-xs text-zinc-400">/ 100</span>
                     </div>
-                    <div className="space-y-1 text-[11px] text-zinc-500">
+                    <div className="space-y-1.5 text-[11px] text-zinc-500">
                       {tr.score.rule_points !== undefined && (
                         <div className="flex justify-between">
                           <span>Rules</span>
@@ -491,17 +483,20 @@ export default function OpsDashboard() {
                           <span className="font-mono">{tr.score.llm_adjustment > 0 ? "+" : ""}{tr.score.llm_adjustment}</span>
                         </div>
                       )}
+                      {tr.score.reason && (
+                        <p className="text-[10px] text-zinc-400 mt-2 pt-2 border-t border-zinc-100 leading-relaxed font-mono">{tr.score.reason}</p>
+                      )}
                     </div>
                     {tr.score.llm_reason && (
-                      <p className="text-[10px] text-zinc-400 mt-2 leading-relaxed">{tr.score.llm_reason}</p>
+                      <p className="text-[10px] text-zinc-400 mt-2 leading-relaxed italic">{tr.score.llm_reason}</p>
                     )}
                   </div>
                 )}
 
                 {tr?.enrichment && (
                   <div className="bg-white border border-zinc-200 rounded-lg p-4">
-                    <h3 className="text-xs font-semibold text-zinc-700 mb-2">Enrichment</h3>
-                    <div className="space-y-1.5 text-[11px]">
+                    <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Enrichment</h3>
+                    <div className="space-y-2 text-[11px]">
                       {([
                         ["Industry", tr.enrichment.industry],
                         ["Size", tr.enrichment.company_size],
@@ -526,9 +521,9 @@ export default function OpsDashboard() {
                 </p>
               )}
 
-              {/* Phased RAO Timeline */}
+              {/* Triage trace — full width */}
               <div>
-                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Triage trace</h3>
+                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">Triage trace</h3>
                 <div className="space-y-1">
                   {phases.map((phase, pi) => {
                     const isExpanded = expandedPhases.has(pi);
@@ -540,7 +535,7 @@ export default function OpsDashboard() {
                       <div key={pi} className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
                         <button
                           onClick={() => togglePhase(pi)}
-                          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-zinc-50 transition-colors"
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-zinc-50 transition-colors"
                         >
                           <div className={`w-2 h-2 rounded-full shrink-0 ${isEnd ? "bg-emerald-500" : isStart ? "bg-zinc-300" : "bg-indigo-500"}`} />
                           <span className="text-sm font-medium text-zinc-800 flex-1">{phase.name}</span>
