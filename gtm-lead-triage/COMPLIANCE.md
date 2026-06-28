@@ -12,9 +12,13 @@
 
 **Not stored:**
 - Raw PDL API responses (only mapped fields persisted)
-- Full LLM prompt/response text (only token counts and summary)
 - Website HTML content (fetched transiently, not persisted)
 - API keys or tokens (env-only, never in DB or logs)
+
+**Note:** Trace events record tool-call arguments (including lead email, name,
+company, and message) and tool responses. LLM prompt/response text is not stored
+separately, but lead PII is present in trace payloads. The `DELETE /contacts/{email}`
+endpoint removes all trace events for a given email.
 
 ## Lawful basis
 
@@ -31,12 +35,17 @@ For leads who express opt-out intent, processing stops immediately
 ### Right to erasure (Art. 17)
 
 `DELETE /contacts/{email}` removes:
-- CRM contact record
-- All CRM activities for that email
-- All trace events for runs involving that email
-- All idempotency records for those runs
+- CRM contact record (SQLite CRM: full deletion; **HubSpot CRM: not yet
+  implemented** — base class no-op returns False)
+- All CRM activities for that email (SQLite only; HubSpot: see above)
+- All trace events for runs involving that email (SQLite and Postgres)
+- All idempotency records for those runs (SQLite and Postgres)
 
 The endpoint returns a confirmation with counts of deleted records.
+
+**Known gap:** HubSpot CRM backend does not implement `delete_contact()`. If
+using HubSpot, deletion must be performed manually via the HubSpot dashboard
+until the API integration is completed.
 
 ### Right to access (Art. 15)
 

@@ -309,3 +309,63 @@ fast-forwarded cleanly (no conflicts — disjoint files).
 - **Mock eval gate: 5/5**
 - **GitHub Actions CI: green** (run 28307610669)
 - Commit: ae970d1 on main, pushed to origin/main
+
+## 2026-06-27 — Phase M: Production readiness close-out
+
+### Audit reconciliation
+Cold re-audit produced findings report (`docs/audit/PRODUCTION_READINESS_AUDIT.md`).
+Reconciliation pass verified every finding against actual file:line, deleted two
+false findings from the raw agent output (both claimed `pg_store.py` lacked
+`ping()`/`delete_by_email()` — both exist at `:344`/`:324`), and re-rated
+severity for the actual deployment scenario (portfolio demo on Render free tier,
+not 1000-RPS production).
+
+Original: 3 blockers, 8 major, 6 minor.
+Reconciled: 0 blockers, 1 major (R3: LLM failure aborts triage), rest minor/info.
+
+### Severity-calibrated top 5 (for demo)
+1. **R3: Wrap `chat()` in try/except** — only Major; OpenAI hiccup during live
+   demo → visible 500.
+2. **R1 partial: Wire retry on LLM call** — one `retry_with_backoff()` call site
+   silently recovers transient failures.
+3. **C5: Consume `injection_flagged`** — flag is dead data; either use it or
+   remove the detection code.
+4. **E3: Scoring-rule unit tests** — `_score_rules()` only tested end-to-end;
+   threshold typos slip through CI.
+5. **C1: Website fallback or remove claim** — `skip_website=True` contradicts
+   ARCHITECTURE.md.
+
+### Dependency/CVE audit
+- `pip-audit -r requirements.txt` — **no known vulnerabilities**
+- `pip-audit -r requirements-dev.txt` — **no known vulnerabilities**
+- GTM service imports zero parent-project dependencies (no aiohttp, chromadb,
+  langchain, rank_bm25, sentence_transformers, camelot). Dockerfile copies only
+  `gtm_triage/`; `.dockerignore` excludes tests/evals/docs/.env/.git.
+
+### Deployment config fixes
+- **Dockerfile:** non-root user (`appuser`), `requirements.txt` instead of inline
+  pip install, `HEALTHCHECK` directive calling `/ready`, `.dockerignore` created,
+  `psycopg_pool` added.
+- **render.yaml:** `healthCheckPath` changed from `/health` (always-200 stub) to
+  `/ready` (truthful probe); `APP_ENV=production` added (enables fail-closed
+  auth); `GTM_API_KEYS` added as secret env var.
+
+### COMPLIANCE.md corrections
+- Removed false claim that LLM prompts are not stored (trace payloads contain
+  full tool args including lead PII).
+- Documented HubSpot CRM deletion gap honestly (base class no-op, not yet
+  implemented).
+
+### Eval reproducibility proven
+- Mock gate: 5/5 deterministic, keyless.
+- Holdout v2 OpenAI+PDL runs 1-3: tier-for-tier identical (23/35 = 65.7%),
+  confirming temp=0 determinism.
+- FINAL_LOCK (22/35 = 62.9%, extractor A): committed at `452fe4b`, JSONL
+  artifact verified (37 lines: 1 meta + 35 cases + 1 summary).
+- `temperature=0` confirmed at `llm_client.py:223`.
+
+### Final state
+- **405 tests green** (0 failures)
+- **Mock eval gate: 5/5**
+- **pip-audit: clean**
+- Reconciled audit report: `docs/audit/PRODUCTION_READINESS_AUDIT.md`

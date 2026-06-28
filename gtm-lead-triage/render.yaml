@@ -7,8 +7,12 @@ services:
     region: oregon
     plan: free
     envVars:
+      - key: APP_ENV
+        value: production
       - key: GTM_PROVIDER
         value: mock
+      - key: GTM_API_KEYS
+        sync: false
       - key: CRM_BACKEND
         value: hubspot
       - key: HUBSPOT_TOKEN
@@ -25,4 +29,4 @@ services:
         sync: false
       - key: LANGFUSE_BASE_URL
         sync: false
-    healthCheckPath: /health
+    healthCheckPath: /ready
