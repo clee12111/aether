@@ -159,15 +159,16 @@ async def _lifespan(app: FastAPI):
 
     database_url = os.environ.get("DATABASE_URL", "").strip()
 
-    if crm_backend == "hubspot":
+    # When DATABASE_URL is set, ALWAYS use Postgres for CRM (deploy-safe).
+    # HubSpot only when explicitly chosen AND no DATABASE_URL.
+    if database_url:
+        from gtm_triage.crm.pg_crm import PostgresCRM
+        _crm = PostgresCRM(database_url)
+    elif crm_backend == "hubspot":
         token = os.environ.get("HUBSPOT_TOKEN", "").strip()
         if not token:
             raise RuntimeError("CRM_BACKEND=hubspot requires HUBSPOT_TOKEN env var")
         _crm = HubSpotCRM(token)
-    elif database_url:
-        # Postgres CRM shares the same DATABASE_URL as the trace store
-        from gtm_triage.crm.pg_crm import PostgresCRM
-        _crm = PostgresCRM(database_url)
     else:
         _crm = SQLiteCRM(crm_path)
 
