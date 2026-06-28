@@ -239,9 +239,10 @@ class TestMetrics:
         assert "# HELP" in body
         assert "# TYPE" in body
 
-    def test_metrics_endpoint_public(self):
+    def test_metrics_endpoint_auth_protected(self):
+        """Metrics are auth-protected (business-sensitive data)."""
         from gtm_triage.middleware import _PUBLIC_PATHS
-        assert "/metrics" in _PUBLIC_PATHS
+        assert "/metrics" not in _PUBLIC_PATHS
 
     def test_metrics_endpoint_returns_text_plain(self):
         with _make_client() as client:
@@ -575,21 +576,26 @@ class TestOutcomes:
             assert resp.status_code == 200
             # Should be valid JSON with zero counts (no 500)
 
-    def test_metrics_outcomes_public(self):
+    def test_metrics_outcomes_auth_protected(self):
+        """Outcome metrics are auth-protected (business-sensitive)."""
         from gtm_triage.middleware import _PUBLIC_PATHS
-        assert "/metrics/outcomes" in _PUBLIC_PATHS
+        assert "/metrics/outcomes" not in _PUBLIC_PATHS
 
 
 # ── Cross-cutting: _PUBLIC_PATHS ─────────────────────────────────────────────
 
 
 class TestPublicPaths:
-    def test_all_observability_endpoints_public(self):
+    def test_health_and_ready_are_public(self):
         from gtm_triage.middleware import _PUBLIC_PATHS
         assert "/health" in _PUBLIC_PATHS
         assert "/ready" in _PUBLIC_PATHS
-        assert "/metrics" in _PUBLIC_PATHS
-        assert "/metrics/outcomes" in _PUBLIC_PATHS
+
+    def test_metrics_are_auth_protected(self):
+        """Business-sensitive metrics endpoints require auth."""
+        from gtm_triage.middleware import _PUBLIC_PATHS
+        assert "/metrics" not in _PUBLIC_PATHS
+        assert "/metrics/outcomes" not in _PUBLIC_PATHS
 
 
 # ── K3: Rolling error rate tracker ───────────────────────────────────────────

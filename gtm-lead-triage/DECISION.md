@@ -234,10 +234,52 @@ Lead messages are ATTACKER-CONTROLLED text that flows into: (1) LLM extraction +
 - `outcomes` table in TraceStore (CREATE TABLE IF NOT EXISTS). No email stored — run_id only.
 - `POST /outcomes/{run_id}`: write-once (409 on dup, 404 if run unknown).
   `actual_outcome` enum: converted / no_show / unqualified / unknown.
-- `GET /metrics/outcomes`: precision-against-outcome per tier (empty-safe). Public.
+- `GET /metrics/outcomes`: precision-against-outcome per tier (empty-safe). Auth-protected.
 
 ### Cross-cutting
-- `_PUBLIC_PATHS` updated: `/health`, `/ready`, `/metrics`, `/metrics/outcomes`, `/docs`, etc.
+- `_PUBLIC_PATHS` updated: `/health`, `/ready`, `/docs`, etc. `/metrics` and `/metrics/outcomes`
+  are auth-protected (business-sensitive data).
 - `RequestIdMiddleware` assigns UUID per request, returns `X-Request-Id` response header.
 - `MetricsMiddleware` records request count, latency, error type per endpoint.
 - 48 new tests covering all K1–K7 subsystems in isolation (no external deps required).
+
+## 2026-06-27 — Phase L: Testing + CI/CD
+
+### L1 — GitHub Actions CI
+- `.github/workflows/gtm-ci.yml`: runs on push/PR touching `gtm-lead-triage/**`.
+- Two sequential steps: `pytest tests/ --cov=gtm_triage --cov-fail-under=70` then
+  `python evals/run_eval.py` (deterministic mock eval gate). Red = can't merge.
+- Dependency caching via `actions/cache` keyed on `requirements-dev.txt`.
+- Python 3.11 pinned. Zero secrets required.
+
+### L2 — Integration tests
+- `tests/test_integration.py`: 13 end-to-end flows through real FastAPI app (TestClient).
+- Full triage lifecycle (all 4 tiers), idempotency replay (same/different keys), auth
+  enforcement (no-key/wrong-key/valid-key/public/fail-closed), rate-limit unit test,
+  `/ready` 503 with mocked broken TraceStore.ping(), `/health` stays 200 when dep broken,
+  outcome flow (triage → record → metrics), right-to-erasure (triage → delete → verify gone).
+
+### L3 — Load/concurrency smoke test
+- `tests/test_concurrency.py`: 20 rapid sequential `/triage` requests (mock provider).
+  All must complete 200, unique run_ids, bounded latency (<30s), mixed tiers correct,
+  no trace corruption (each run_id has its own events).
+- Store-level: rapid sequential trace + CRM writes, concurrent metric counter increments
+  (Lock-protected counters verified at 1000 = 10 threads × 100 increments).
+
+### L4 — Coverage
+- `setup.cfg`: pytest config + coverage config. Source: `gtm_triage`, omit mcp_server/tests/evals.
+- Floor: 70%. Current: 83.14%. `pytest-cov` in `requirements-dev.txt`.
+
+### L5 — /metrics exposure decision: AUTH-PROTECTED
+**Decision: auth-protect `/metrics` and `/metrics/outcomes`.**
+- `/metrics` exposes: triage volumes, tier distribution, cache hit rates, daily cap usage,
+  circuit-breaker state. All business-sensitive in multi-tenant production.
+- `/metrics/outcomes` exposes: prediction precision by tier — competitive intelligence.
+- `/ready` stays public — load balancers need it without credentials.
+- Removed both from `_PUBLIC_PATHS`. Integration test verifies 401 without key, 200 with key.
+
+### Test summary
+- 385 total tests (313 existing + 24 integration + 7 concurrency + 48 observability − 7 updated).
+- Coverage: 83.14% (floor 70%).
+- Mock CI gate: 5/5.
+- `tests/conftest.py`: sets high rate limit default to prevent cross-test bucket exhaustion.

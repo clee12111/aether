@@ -36,8 +36,11 @@ def error_response(status_code: int, error_type: str, message: str) -> JSONRespo
 
 # ── Auth middleware ──────────────────────────────────────────────────────────
 
-# Paths that don't require auth
-_PUBLIC_PATHS = {"/health", "/ready", "/metrics", "/metrics/outcomes", "/docs", "/openapi.json", "/redoc"}
+# Paths that don't require auth.
+# /metrics and /metrics/outcomes are auth-protected: they expose business-sensitive
+# data (triage volumes, tier distribution, cache hit rates, daily cap usage).
+# /ready stays public — load balancers need it without credentials.
+_PUBLIC_PATHS = {"/health", "/ready", "/docs", "/openapi.json", "/redoc"}
 
 
 def _check_auth_startup() -> None:

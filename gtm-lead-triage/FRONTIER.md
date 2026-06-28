@@ -692,6 +692,374 @@ These apply to ALL of K1–K7 and will be checked by frontier-audit:
 
 ---
 
+## Phase L: Testing + CI/CD
+
+### Context
+The service has a substantial unit-test corpus (`tests/`) and a mock-mode eval
+gate (`evals/run_eval.py`). What it lacks is: a GitHub Actions workflow that
+enforces the gate on every push/PR; integration tests that exercise FastAPI
+end-to-end (not just unit-level); a concurrency smoke test; a coverage floor;
+and a settled decision on `/metrics` auth. Phase L closes those gaps.
+
+The non-negotiable constraint: **CI must pass with zero external credentials
+set** (`OPENAI_API_KEY`, `SENTRY_DSN`, `OTLP_ENDPOINT`, `ALERT_WEBHOOK_URL`,
+`HUBSPOT_TOKEN` all absent). Every test that touches the API or agent pipeline
+uses `provider=mock` and in-memory stores. No real network calls in CI.
+
+---
+
+### L1 — GitHub Actions CI: pytest + mock eval gate
+
+**The problem:** There is no `.github/workflows/` directory. Nothing enforces
+that a PR cannot merge if `pytest` fails or if the mock eval gate regresses.
+A developer who breaks the `SHORT_CIRCUIT_INVALID` branch or a Pydantic model
+gets no automated signal until they notice locally.
+
+**Frontier bar:**
+1. **Workflow file** — `.github/workflows/ci.yml` triggers on `push` and
+   `pull_request` to `main`. It MUST block merges on red (set as a required
+   status check; documented in the workflow comments even if branch protection
+   is configured separately).
+2. **Single job, two steps** — the CI job runs:
+   - `pytest tests/ -x --tb=short` (all unit tests, fail-fast on first failure)
+   - `python -m evals.run_eval` (mock eval gate — must exit 0, i.e., all 5
+     MOCK_LEADS correct on tier AND route)
+   Both steps use `provider=mock`; no API key required.
+3. **Dependency caching** — Python deps are cached via
+   `actions/cache` keyed on the `requirements*.txt` or equivalent lock file.
+   A cache hit must skip re-installation (verifiable by "cache hit" log line in
+   the Actions run). Cold install is acceptable on cache miss; warm install must
+   be < 60 seconds for the full dep set.
+4. **Python version pinned** — `python-version: "3.11"` (matching the project
+   stack). The workflow does NOT use `python-version: "3.x"` (floating version
+   is not pinned).
+5. **No secrets required** — the workflow file contains zero references to
+   `OPENAI_API_KEY`, `SENTRY_DSN`, `HUBSPOT_TOKEN`, or any external secret. If
+   a secret is conditionally used for an optional integration test job, it is a
+   SEPARATE job that does not gate the required check.
+6. **Eval gate exit code** — `python -m evals.run_eval` must return exit code 0
+   on all 5 MOCK_LEADS. Any regression (even one lead changing tier or route)
+   returns exit code 1 and fails the CI job. This is already the behavior of
+   `evals/run_eval.py:main()` — CI just needs to call it.
+
+**Falsifiable checks:**
+- [ ] `.github/workflows/ci.yml` exists and triggers on `push` and
+      `pull_request` targeting `main`.
+- [ ] The workflow installs deps and runs `pytest tests/ -x --tb=short`.
+- [ ] The workflow runs `python -m evals.run_eval` as a separate step after
+      pytest passes.
+- [ ] Dependency cache is configured: `actions/cache` key includes the hash of
+      the lock/requirements file. A second identical push hits the cache.
+- [ ] `python-version` is set to the literal string `"3.11"` (not `"3.x"`).
+- [ ] No `OPENAI_API_KEY` or other external secret appears in the required CI
+      job's `env:` block.
+- [ ] Manually breaking one MOCK_LEADS case (e.g., hardcoding the wrong tier
+      in the mock) causes `python -m evals.run_eval` to exit 1 and the CI job
+      to fail (verified by local dry-run or deliberate regression test).
+- [ ] The workflow file has a comment identifying the required status check
+      name that should be added to branch protection rules.
+
+**Median fallback (what to avoid):**
+- A workflow that only runs `pytest` and skips the eval gate.
+- Floating Python version (`3.x`) that silently changes behavior on minor
+  releases.
+- Caching the entire virtualenv directory instead of keying on the lock file
+  (stale cache when deps change).
+- Putting `OPENAI_API_KEY` in the workflow env and calling `provider=mock`
+  tests "integration tests" to justify needing the key.
+
+---
+
+### L2 — Integration tests: end-to-end FastAPI flows
+
+**The problem:** `tests/test_api_hardening.py` and `tests/test_observability.py`
+test individual middleware and unit behaviors via `TestClient`. There are no
+tests that exercise complete end-to-end flows: the full triage lifecycle,
+idempotency replay behavior, auth enforcement on protected vs. public endpoints,
+rate-limit enforcement under sustained load, and the `/ready` 503 path with a
+deliberately broken dependency.
+
+**Frontier bar:**
+1. **Full triage lifecycle** — a test submits `POST /triage`, verifies `200 +
+   TriageResult` JSON shape (`run_id`, `final_tier`, `final_route`, `score`,
+   `enrichment`, `trace_path`), then calls `GET /runs/{run_id}` and asserts the
+   trace events are present (event count > 0). One test per expected tier
+   (hot, warm, cold, disqualified) using deterministic mock leads.
+2. **Idempotency replay** — submit `POST /triage` twice with the same
+   `idempotency_key`. Assert: (a) both return 200, (b) both return the exact
+   same `run_id`, (c) `cache_hit_total` metric increments on the second call.
+   A third call with a DIFFERENT `idempotency_key` but same email+message
+   (auto-derived key) also hits the cache (verifies the SHA-256 derivation path).
+3. **Auth enforcement** — with `GTM_API_KEYS` set:
+   - `POST /triage` without a key → 401.
+   - `POST /triage` with an invalid key → 401.
+   - `POST /triage` with a valid Bearer token → 200.
+   - `POST /triage` with a valid `X-API-Key` header → 200.
+   - `GET /health`, `GET /ready`, `GET /metrics`, `GET /metrics/outcomes` all
+     return 200 with no auth header (public paths, no 401).
+4. **Rate-limit enforcement** — set `GTM_RATE_LIMIT_RPM=2`. Submit 3 rapid
+   `POST /triage` requests to the same key. Assert at least one returns 429
+   with `error.type == "rate_limited"`. Assert that `GET /health` (public path)
+   is never rate-limited regardless.
+5. **`/ready` with broken dependency** — construct a `TestClient` where the
+   `TraceStore` is replaced with a mock whose `ping()` returns `False`. Assert
+   `GET /ready` returns 503 with `{"ready": false, "checks": {"trace": "fail",
+   ...}}`. Assert `GET /health` in the same scenario returns 200 (liveness is
+   independent of readiness).
+6. **`POST /outcomes` lifecycle** — triage a lead, record an outcome, assert 201;
+   record the same outcome again, assert 409; record an outcome for a nonexistent
+   `run_id`, assert 404; record `actual_outcome="deal_closed"`, assert 422.
+7. **`DELETE /contacts/{email}` right-to-erasure** — triage a lead, then delete
+   by email. Assert 200 with `crm_record_deleted=True`. Assert subsequent
+   `GET /contacts/{email}` returns an empty record (not 500).
+
+**Falsifiable checks:**
+- [ ] A `TestClient`-based integration test file exists (e.g.,
+      `tests/test_integration.py`) distinct from the unit test files.
+- [ ] Full triage lifecycle test: `POST /triage` → 200 → `GET /runs/{run_id}`
+      → event count > 0. Covers all 4 tiers via 4 distinct mock leads.
+- [ ] Idempotency test: same `idempotency_key` submitted twice returns same
+      `run_id` both times.
+- [ ] Idempotency test: auto-derived key (no explicit `idempotency_key` field)
+      deduplicates on identical email+message+source.
+- [ ] Auth test: `POST /triage` with no key → 401 when `GTM_API_KEYS` is set.
+- [ ] Auth test: `GET /health` → 200 with no key even when auth is enabled.
+- [ ] Rate-limit test: 3rd request with `GTM_RATE_LIMIT_RPM=2` returns 429.
+- [ ] Rate-limit test: `GET /health` is never 429 regardless of rate.
+- [ ] `/ready` broken-dep test: mock `TraceStore.ping()` returns `False` →
+      `GET /ready` returns 503. `GET /health` in same state returns 200.
+- [ ] Outcome lifecycle: 201 → 409 on duplicate → 404 on unknown run → 422 on
+      invalid outcome value.
+- [ ] Right-to-erasure test: triage + delete → subsequent contact lookup is empty.
+
+**Median fallback (what to avoid):**
+- Adding a few more unit tests to existing files and calling them "integration
+  tests" (they must exercise the full HTTP stack via `TestClient`, not call
+  internal functions directly).
+- Testing auth only in the happy path (missing the no-key, wrong-key cases).
+- Skipping the `/ready` 503 path (it's the only falsifiable check for K1's
+  broken-dependency behavior).
+
+---
+
+### L3 — Load/concurrency smoke test: N concurrent `/triage` requests
+
+**The problem:** The `POST /triage` handler runs `run_triage` in
+`asyncio.to_thread()` (see `api.py:407`), which means the async event loop is
+not blocked, but the thread pool may be exhausted under concurrent load and
+shared in-memory state (idempotency cache, metric counters, circuit breakers)
+may corrupt under race conditions. There is no test that fires concurrent
+requests and checks for crashes, state corruption, or unacceptable latency.
+
+**Frontier bar:**
+1. **N=20 concurrent requests, distinct leads** — submit 20 `POST /triage`
+   requests concurrently (using `asyncio.gather` or `concurrent.futures.
+   ThreadPoolExecutor`) against a `TestClient`-backed ASGI app. All 20 use
+   distinct emails and distinct idempotency keys. Assertion: all 20 return 200.
+2. **No response corruption** — each response is a valid `TriageResult` JSON
+   with a unique `run_id`. No two responses share a `run_id`. No response
+   contains another lead's email in any field.
+3. **No state corruption in metric counters** — after the 20 concurrent
+   requests, `metrics.requests_total` counter (summed across all label combos)
+   has incremented by exactly 20 (no lost increments, no double-counts).
+4. **N=20 concurrent idempotency-key collisions** — submit 20 concurrent
+   requests all using the SAME `idempotency_key`. Assertion: all 20 return 200
+   and all 20 return the same `run_id`. No 500s. `cache_hit_total` increments
+   by 19 (first is a miss, 19 are hits — race tolerance: accept 18-19 due to
+   the race window between cache check and cache write, but not less than 18).
+5. **Latency bound (mock provider only)** — wall-clock time for the 20
+   concurrent mock requests (from first submit to last response) is < 10
+   seconds. This is a smoke check, not a performance SLO: the mock provider
+   has no I/O latency so any >10s result indicates a serialization bug (e.g.,
+   the thread pool is sized 1).
+6. **No crashes** — after the concurrent test, the app is still healthy:
+   `GET /health` returns 200 and `GET /ready` returns 200.
+
+**Falsifiable checks:**
+- [ ] A test or script (e.g., `tests/test_concurrency.py`) submits N=20
+      concurrent `POST /triage` requests using distinct leads and asserts all
+      200 responses.
+- [ ] No two responses in the N=20 run share a `run_id`.
+- [ ] After N=20 requests, `metrics.requests_total` has incremented by exactly
+      20 (counter integrity check).
+- [ ] N=20 concurrent requests with the same `idempotency_key` all return 200
+      with the same `run_id`. No 500s.
+- [ ] `cache_hit_total` increments by ≥ 18 in the idempotency-collision test.
+- [ ] Wall-clock time for N=20 concurrent mock requests is < 10 seconds
+      (asserted with `time.monotonic()` in the test).
+- [ ] `GET /health` and `GET /ready` return 200 after the concurrency test
+      completes (no crash-and-wedge scenario).
+
+**Median fallback (what to avoid):**
+- Sequential requests with `time.sleep(0)` between them called "concurrent."
+- Testing concurrency only on a unit function, not on the full HTTP stack
+  (the `asyncio.to_thread` boundary is where races happen).
+- A lax latency bound of 60s that would pass even a fully serialized thread
+  pool.
+- Skipping the idempotency-collision case (that's the shared-state path most
+  likely to corrupt under concurrent access).
+
+---
+
+### L4 — Coverage: report + floor (fail under X%)
+
+**The problem:** There is no coverage measurement and no floor. It is possible
+to delete entire test classes, break entire subsystems, and have CI pass as
+long as `pytest tests/ -x` exits 0 (which it would if the broken tests are
+also deleted). A coverage floor makes deletions of tests visible.
+
+**Frontier bar:**
+1. **Coverage report in CI** — CI runs `pytest` with `--cov=gtm_triage
+   --cov-report=term-missing --cov-report=xml`. The XML report (`coverage.xml`)
+   is uploaded as a CI artifact. The terminal report shows per-module line
+   coverage with missing lines.
+2. **Coverage floor of 80%** — `pytest --cov=gtm_triage --cov-fail-under=80`
+   causes the CI job to fail if total line coverage drops below 80%. The 80%
+   floor is calibrated to the current test corpus (K-phase tests are expected
+   to hold the line comfortably above this; the floor prevents catastrophic
+   regression, not marginal drift).
+3. **Excluded from coverage** — the following paths are excluded via
+   `.coveragerc` or `pyproject.toml [tool.coverage.run] omit`:
+   - `gtm_triage/mcp_server.py` (MCP integration, not tested in unit suite)
+   - `tests/` (test files themselves)
+   - `evals/` (eval scripts, not the module under test)
+   The exclusion list is explicit and reviewed; blanket `omit=*` is not allowed.
+4. **Coverage does not count mock/stub code as tested** — `gtm_triage/agents/
+   llm_client.py`'s mock branch is tested by the mock-mode tests. The real
+   OpenAI branch is NOT counted as covered (it requires `OPENAI_API_KEY` and
+   is only exercised in the optional openai-eval job). This is acceptable: the
+   floor applies to the lines that CAN be reached in CI (mock mode).
+5. **`pytest-cov` is the only coverage tool** — no separate `coverage run` +
+   `coverage report` invocation. The `pytest --cov` flag is the single source
+   of truth. `pytest-cov` must be listed as a dev/test dependency.
+
+**Falsifiable checks:**
+- [ ] `pytest tests/ --cov=gtm_triage --cov-fail-under=80` exits 0 on the
+      current test corpus (establishes that the floor is achievable).
+- [ ] Deleting `tests/test_observability.py` and re-running causes coverage to
+      drop below 80% and the CI job to fail (verifies the floor is meaningful).
+- [ ] `coverage.xml` is produced by CI and uploaded as an artifact (verifiable
+      in the Actions run's Artifacts section).
+- [ ] `.coveragerc` or `pyproject.toml [tool.coverage.run]` has an explicit
+      `omit` list that includes `gtm_triage/mcp_server.py` and `tests/`.
+- [ ] `pytest-cov` appears in the project's test/dev dependency list (in
+      `requirements-dev.txt`, `pyproject.toml [dev]`, or equivalent).
+- [ ] The CI workflow passes `--cov-fail-under=80` to `pytest` (not a separate
+      post-hoc check).
+
+**Median fallback (what to avoid):**
+- A `coverage.xml` artifact with no floor (report-only: coverage can drop to
+  0% and CI still passes).
+- Setting the floor at 50% (so low it catches only catastrophic total deletion).
+- Omitting `gtm_triage/mcp_server.py` implicitly by never calling it, then
+  being surprised when it's included in the denominator and drops the total.
+- Running `coverage run -m pytest` separately from `pytest --cov` (two tools,
+  potentially inconsistent results).
+
+---
+
+### L5 — `/metrics` auth decision: protect or document the public choice
+
+**The problem:** `/metrics` is currently in `_PUBLIC_PATHS` (no auth required).
+This is a deliberate choice documented in Phase K (K3, point 5: "`/metrics` is
+public — same as `/health`. Operators need it from monitoring infra without
+client credentials"). However, the choice is not explicitly surfaced in the
+codebase, and there is no test that asserts the public status is intentional
+rather than an oversight. Meanwhile, Prometheus metric endpoints can leak
+internal topology (circuit-breaker names, endpoint names) to unauthenticated
+callers.
+
+**Frontier bar:**
+The frontier bar for this item is a DECISION, not an implementation. Two
+acceptable outcomes:
+
+**Option A — Keep `/metrics` public, document explicitly:**
+1. A `DECISION.md` entry records the choice: "we accept `/metrics` public
+   because the metric labels contain no PII and the operational benefit
+   (scraping from infra without credentials) outweighs the marginal topology
+   leak risk."
+2. A comment in `middleware.py` at the `_PUBLIC_PATHS` definition explains
+   WHY `/metrics` is public (not just that it is).
+3. A test asserts `"/metrics" in _PUBLIC_PATHS` (already present in
+   `test_observability.py:TestPublicPaths` — must remain present and not be
+   deleted or marked `xfail`).
+4. The `GET /metrics` endpoint validates that no metric label contains a
+   `run_id`, `request_id`, or any user-supplied string (the no-cardinality-bomb
+   rule from K3 is the security backstop for the public choice).
+
+**Option B — Auth-protect `/metrics` behind API key:**
+1. `/metrics` is removed from `_PUBLIC_PATHS`.
+2. `AuthMiddleware` enforces the API key on `/metrics` the same way it does on
+   `/triage`.
+3. The Prometheus scrape job in any deployment config (e.g., `render.yaml`,
+   `docker-compose.yml`) is updated to pass the API key in the scrape config.
+4. A test asserts `GET /metrics` without a key returns 401 when
+   `GTM_API_KEYS` is set.
+5. The `DECISION.md` entry records why auth was added (e.g., topology concerns,
+   compliance requirement, or operator preference).
+
+**The bar is met by implementing EITHER option fully.** A half-measure (auth
+on `/metrics` but no scrape config update, or public `/metrics` with no
+documentation) does NOT meet the bar.
+
+**Falsifiable checks (Option A — public + documented):**
+- [ ] `DECISION.md` has a dated entry for the `/metrics` auth decision stating
+      "public" and the rationale.
+- [ ] `_PUBLIC_PATHS` in `middleware.py` has an inline comment explaining why
+      `/metrics` is public (not just a path string in a set).
+- [ ] `TestPublicPaths.test_all_observability_endpoints_public` in
+      `test_observability.py` passes and is NOT skipped/xfailed.
+- [ ] `test_no_email_in_metric_labels` in `test_observability.py` passes
+      (no PII in labels is the security backstop for the public choice).
+
+**Falsifiable checks (Option B — auth-protected):**
+- [ ] `"/metrics"` is NOT in `_PUBLIC_PATHS`.
+- [ ] `GET /metrics` without a key returns 401 when `GTM_API_KEYS` is set.
+- [ ] `GET /metrics` with a valid key returns 200 with Prometheus text body.
+- [ ] `render.yaml` or `docker-compose.yml` shows the API key passed to the
+      Prometheus scrape config (or documents the scrape auth mechanism).
+- [ ] `DECISION.md` has a dated entry recording the auth choice and rationale.
+
+**Median fallback (what to avoid):**
+- Leaving the decision implicit (no DECISION.md entry, no comment, just a path
+  in a set).
+- Implementing auth on `/metrics` but not updating the deployment scrape config
+  (breaks monitoring silently on deploy).
+- Claiming the decision is "documented" because K3 in this FRONTIER.md says
+  it's public (FRONTIER.md is a bar-setter, not operational documentation; the
+  decision must live in DECISION.md and the code comment).
+
+---
+
+### Cross-cutting constraints for Phase L
+
+These apply to ALL of L1–L5 and will be checked by frontier-audit:
+
+1. **Zero credentials in CI** — The required CI job (`ci.yml` main job) must
+   pass with no secrets set. Optional jobs (e.g., a separate `openai-eval` job
+   gated on `secrets.OPENAI_API_KEY != ''`) are allowed but must NOT be required
+   status checks.
+
+2. **`provider=mock` in all CI tests** — Every test in `tests/` and every eval
+   invocation in CI must use `provider=mock` and `GTM_PROVIDER=mock`. No test
+   should silently fall back to OpenAI because the env var is unset.
+
+3. **Test isolation: in-memory stores** — Integration tests must use
+   `GTM_CRM_DB=:memory:` and `GTM_TRACE_DB=:memory:` (or equivalent `tmp_path`
+   fixtures). Tests must not read or write `gtm_crm.db` or `gtm_trace.db` in
+   the repository root (those are runtime files, not test fixtures).
+
+4. **Coverage floor applies to the `gtm_triage` package only** — `evals/`,
+   `scripts/`, `tests/`, and `web/` are excluded. The floor is a quality signal
+   for the production module, not for test helpers.
+
+5. **No flaky tests** — A test that requires `time.sleep()` > 1 second to
+   pass (e.g., waiting for a rate-limit window to reset) must use injectable
+   clocks or token-bucket reset methods rather than real `sleep()`. CI must
+   complete the full test suite in < 3 minutes (cold dep install excluded).
+
+---
+
 ## How to use this file
 Build against these checks. When implementation is done, run `frontier-audit`
 against each checkbox. A check is either met (with evidence: file, line, test

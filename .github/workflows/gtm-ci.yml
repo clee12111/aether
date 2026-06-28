@@ -1,0 +1,53 @@
+name: GTM Lead-Triage CI
+
+on:
+  push:
+    paths:
+      - 'gtm-lead-triage/**'
+  pull_request:
+    paths:
+      - 'gtm-lead-triage/**'
+
+defaults:
+  run:
+    working-directory: gtm-lead-triage
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('gtm-lead-triage/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest suite with coverage
+        run: |
+          python -m pytest tests/ -q --tb=short \
+            --cov=gtm_triage --cov-report=term-missing \
+            --cov-fail-under=70
+
+      - name: Run mock eval gate (deterministic, keyless)
+        env:
+          PYTHONPATH: .
+        run: |
+          python evals/run_eval.py
