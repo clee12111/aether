@@ -126,5 +126,13 @@ class SQLiteCRM(CRMStore):
         self._conn.commit()
         return True
 
+    def ping(self) -> bool:
+        """Lightweight health check — runs SELECT 1 on the connection."""
+        try:
+            self._conn.execute("SELECT 1").fetchone()
+            return True
+        except Exception:
+            return False
+
     def close(self) -> None:
         self._conn.close()

@@ -36,6 +36,10 @@ class CRMStore(ABC):
         """
         return False  # default no-op; override in implementations
 
+    def ping(self) -> bool:
+        """Lightweight health check. Returns True if the store is reachable."""
+        return True  # default optimistic; override for real checks
+
     def close(self) -> None:
         """Release resources. Override if the backend holds connections."""
         pass

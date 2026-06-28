@@ -1,207 +1,237 @@
-# FRONTIER AUDIT — GTM Lead-Triage
-**Date:** 2026-06-26  
-**Auditor:** Claude (pre-implementation audit)  
-**Scope:** Three honesty gaps per FRONTIER.md  
-**Verdict:** ALL THREE GAPS OPEN. Current code is theater on enrichment, scripted
-on agency, and teaching-to-the-test on eval.
+# FRONTIER-AUDIT.md — GTM Lead-Triage: Phase K Observability Audit
+
+## Phase K — Observability: Frontier Audit
 
 ---
 
-## Gap 1: Input Extraction — ENTIRELY MISSING
+### Approach landscape
 
-**Current state:** There is no extraction step. The system requires pre-parsed
-fields and will not function without them.
+**K1 — Readiness vs. Liveness split**
+Frontier practice separates /health (pure liveness: no I/O, under 1ms, always
+200 while the process lives) from /ready (readiness: synchronous dependency
+checks — trace store, CRM, optional enrichment provider). Kubernetes routes
+traffic based on readiness, not liveness; conflating them means a broken DB
+silently receives traffic. The readiness response body carries per-dependency
+status so operators can see which dependency failed without log diving.
 
-| Check | Status | Evidence |
-|-------|--------|----------|
-| `POST /triage` accepts `raw_text` | MISSING | `api.py:54-63` — `TriageRequest` has only `email, name, company, message, source`. No `raw_text` field. |
-| Raw email body → `Lead` extraction tests | MISSING | No extraction logic exists anywhere. |
-| Email-only input → valid `Lead` | FAILS | `api.py:55` — `email` is `Field(...)` (required), but `lead.py:5` makes `email` required too. Submitting email-only technically works (other fields default to `""`), but there's no extraction or inference — the empty fields stay empty and flow through as-is. |
-| Extraction confidence + field sources | MISSING | No extraction step exists to produce these. |
-| Malformed input → explicit error | PARTIAL | Pydantic validation on `TriageRequest` catches type errors, but there's no semantic validation (e.g., detecting a raw email body was shoved into the `message` field). |
+**K2 — Structured JSON logging + PII-free correlation**
+Frontier: every log line is newline-delimited JSON with flat fields (ts, level,
+logger, message, plus all extras as top-level keys). A request_id UUID is minted
+per request in middleware, stored in request.state, and injected into every log
+record via a logging.Filter or contextvars.ContextVar — so a run_id emitted in
+run_triage() carries the same request_id as the middleware entry line. PII
+(email, name, company, message) is entirely absent at INFO level; DEBUG only
+when LOG_LEVEL=debug. Structured extra={} kwargs, never f-string interpolation.
 
-**Honest assessment:** This isn't a gap — it's an absence. The system assumes a
-frontend or webhook has already parsed the inbound into fields. That assumption
-is false for real GTM inbound (raw emails, free-text form boxes, webhook payloads
-from tools like n8n/Zapier that pass the full body).
+**K3 — Prometheus-format metrics scrape target**
+Frontier: GET /metrics returns text/plain Prometheus exposition format backed by
+in-process thread-safe counters/gauges/histograms. Required: gtm_requests_total,
+gtm_request_errors_total, gtm_triage_total, gtm_daily_cap_used/limit,
+gtm_circuit_breaker_state, gtm_cache_hit_total/miss_total,
+gtm_request_duration_seconds, gtm_triage_duration_seconds. No SQL queries on
+scrape (except one cheap daily-cap read). No cardinality bombs. Public endpoint.
 
----
+**K4 — Sentry error tracking (no-op without DSN)**
+Frontier: sentry-sdk>=2.0 initialized in _lifespan from SENTRY_DSN. Absent DSN
+means Sentry is a true no-op (no network, no import error). FastAPI integration
+captures unhandled exceptions automatically. A before_send hook scrubs PII before
+events leave the process. Environment tagging via APP_ENV, SENTRY_RELEASE.
+Traces sampling configurable; default 0.0 (error-only, no performance overhead).
 
-## Gap 2: Enrichment — FAKE
+**K5 — Alerting hooks (circuit-open, error-rate-spike)**
+Frontier: an injectable AlertHook protocol (LogAlertHook default, WebhookAlertHook
+when ALERT_WEBHOOK_URL is set). CircuitBreaker accepts an alert_hook kwarg and
+calls hook.fire("circuit_open", {...}) when tripping to OPEN. A rolling 1-minute
+error-rate counter fires error_rate_spike when over 20% of requests error, with
+a 300s cooldown. Webhook is fire-and-forget in a background thread. No global
+singleton — injectable for testing.
 
-**Current state:** `enrich_lead.py` is a keyword matcher pretending to be an
-enrichment service. It has no external data source.
+**K6 — OpenTelemetry instrumentation (no-op without OTLP endpoint)**
+Frontier: OTel SDK initialized in _lifespan; absent OTLP_ENDPOINT or absent SDK
+means NoOpTracerProvider. FastAPI auto-instrumentation for root spans. Manual child
+spans for gtm.tool.crm_lookup, gtm.tool.enrich_lead, gtm.tool.score_lead,
+gtm.llm_call (with llm.input_tokens, llm.output_tokens), and gtm.cache_check.
+OTel trace-id injected into structured logs and run_end trace store payload for
+cross-system correlation. No PII in span attributes.
 
-| Check | Status | Evidence |
-|-------|--------|----------|
-| `EnrichmentProvider` ABC exists | MISSING | No such interface. `EnrichLeadTool` (line 92) does everything inline. |
-| PDL or any external API call | MISSING | Zero HTTP calls in `enrich_lead.py`. No `httpx`, no `requests`, no network I/O. |
-| Email validity (MX/DNS) | MISSING | No DNS lookup. `is_business_email` (line 108) checks domain against a 8-item `FREE_DOMAINS` set — that's it. A typo'd domain like `@gmial.com` passes as "business." |
-| Invalid email → short-circuit | MISSING | Invalid emails flow through the full pipeline. No short-circuit. |
-| PDL response → Pydantic model | MISSING | No PDL call exists. |
-| Company-website fallback | MISSING | No HTTP fetch of any kind. |
-| Rate-limit guard | MISSING | No rate limiting (no external calls to rate-limit). |
-| Response cache | MISSING | No caching. Each call re-runs the same regex. |
-| Regex demoted to MockProvider | N/A | Regex is the *only* provider. Not demoted because nothing replaces it. |
-
-**What's specifically fake:**
-
-1. **Industry inference** (`enrich_lead.py:24-45`): A list of 19 keyword→industry
-   mappings. "fintech" → financial_services, "cloud" → technology. If the company
-   name doesn't contain one of these words, industry = "unknown". A company named
-   "Stripe" would be "unknown."
-
-2. **Company size inference** (`enrich_lead.py:47-51`): "global" or "international"
-   in the name → enterprise. "startup" or "llc" → smb. A 50,000-person company
-   without these words in its name → "unknown."
-
-3. **Seniority inference** (`enrich_lead.py:53-58`): Keyword match on the `name`
-   field. Works when the user types "Julia Martinez, VP of Sales" but fails if
-   they type "Julia Martinez" and their title is elsewhere (like in the email
-   signature of a raw email body).
-
-4. **Confidence score** (`enrich_lead.py:146-154`): `0.5 + 0.2*(business) +
-   0.1*(industry known) + 0.1*(size known) + 0.1*(seniority known)`. This is a
-   count of how many regex matches fired, dressed up as a probability. A lead
-   with a business email and "fintech" in the company name gets 0.8 confidence
-   regardless of whether that data is correct.
-
-5. **LLM fallback** (`enrich_lead.py:124-144`): When `provider="openai"`, unknown
-   fields are sent to GPT for guessing. This is still guessing — the LLM has no
-   access to real firmographic data. It's a more expensive regex.
-
-**Honest assessment:** This is the biggest honesty gap. The tool is named
-"enrich_lead" but it doesn't enrich anything. It pattern-matches on strings the
-user already provided and returns them with a fabricated confidence score. The
-"source" field says `"regex"` or `"regex+llm"` — at least that's honest — but
-the confidence score implies quality that doesn't exist.
+**K7 — Outcome-loop stub**
+Frontier: an outcomes table in TraceStore.__init__ (CREATE TABLE IF NOT EXISTS).
+POST /outcomes/{run_id} (auth required) records actual_outcome (enum:
+converted/no_show/unqualified/unknown), write-once (409 on duplicate, 404 if
+run_id unknown). GET /metrics/outcomes (public) returns per-tier precision from
+the outcomes table at query time. No PII in the outcomes table (run_id only).
 
 ---
 
-## Gap 3: Agency + Eval — SCRIPTED AND GAMED
+### What's WRONG with current state
 
-### 3a. The loop is scripted
+#### K1 — Readiness vs. Liveness: MISSING ENTIRELY
 
-| Check | Status | Evidence |
-|-------|--------|----------|
-| System prompt has no numbered workflow | FAILS | `loop_agent.py:29-35` — explicit numbered WORKFLOW: 1→2→3→4→5. The agent is told what to do in what order. |
-| ≥ 4 distinct trace shapes | FAILS | At most 2 shapes exist: the full sequence (lookup→enrich→score→draft→final) and the skip-draft variant (lookup→enrich→score→final for cold/disqualified). The "skip enrichment on CRM hit" branch is a third shape in theory but only fires for the one CRM-seeded test case. |
-| Invalid email terminates in ≤ 2 steps | FAILS | No invalid-email detection exists. An invalid email runs the full 4-5 step sequence. |
-| Low-confidence enrichment → different path | FAILS | The agent never inspects enrichment confidence. The prompt doesn't mention confidence as a decision factor. Whatever enrichment returns, the agent proceeds to `score_lead`. |
+- api.py:243-245 — /health returns {"status": "ok"} unconditionally. This is
+  correct for liveness but there is no /ready endpoint anywhere in the codebase.
+- No dependency health checks exist. A broken SQLite path, failed TraceStore init,
+  or closed CRM connection passes the current /health check and continues receiving
+  traffic from a load balancer.
+- middleware.py:36 — _PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}.
+  /ready and /metrics are absent. If implemented today they would require an API
+  key, breaking monitoring infrastructure.
+- TraceStore (trace/store.py) has no ping() or lightweight probe method. SQLiteCRM
+  and HubSpotCRM have no equivalent. Both need lightweight probes for /ready.
 
-**What's specifically scripted:**
+#### K2 — Structured JSON logging: MISSING ENTIRELY
 
-The system prompt (`loop_agent.py:27-68`) is a disguised state machine:
-```
-1. crm_lookup — always first
-2. enrich_lead — SKIP if CRM complete
-3. score_lead — always
-4. draft_outreach — ONLY for hot/warm
-5. Finalize
-```
+- api.py:43, middleware.py:21, executor.py:14, loop_agent.py:31, resilience.py:15
+  — all use logging.getLogger(__name__) with no structured formatter configured
+  anywhere. Default Python logging emits plain text.
+- No JSON formatter exists anywhere (no logging.config, no custom Formatter
+  subclass, no python-json-logger or equivalent import).
+- middleware.py does not mint a request_id or store it in request.state. There is
+  no logging.Filter or contextvars.ContextVar to propagate a request-id into
+  downstream log records.
+- loop_agent.py:387-392 — trace.write() for run_start includes "lead": lead.model_dump()
+  which contains email, name, company, and message. In the log layer:
+  middleware.py:196 — logger.exception("Unhandled error on %s %s", ...) and
+  loop_agent.py:468 — logger.warning("Step %d parse failed: %s", ...) both use
+  string interpolation rather than structured extra={} kwargs.
+- resilience.py:51-56 — retry logger also uses string interpolation throughout.
+- No run_id or request_id appears in any log line. Records from inside
+  run_triage() are unattributable to a specific HTTP request.
 
-The model is not "reasoning" — it's following instructions. The `_inject_context`
-function (`loop_agent.py:120-174`) further cements this by auto-filling tool
-arguments from prior steps, removing even the need for the model to reference
-its own observations.
+#### K3 — Prometheus metrics endpoint: MISSING ENTIRELY
 
-### 3b. The eval is gamed
+- No /metrics endpoint exists in api.py.
+- Daily-cap counter is only visible at api.py:229-240 (GET /config), which
+  requires auth and returns JSON, not Prometheus format.
+- Circuit-breaker state (resilience.py:83-90) is entirely invisible from outside
+  the process.
+- No in-process counters, gauges, or histograms exist anywhere in the codebase.
+- The idempotency cache hit path (api.py:257-259) has no counter.
+- /metrics is not in _PUBLIC_PATHS (middleware.py:36).
 
-| Check | Status | Evidence |
-|-------|--------|----------|
-| ≥ 30 leads, ≥ 10 independently sourced | FAILS | 32 leads total (22 golden + 10 holdout), but ZERO are independently sourced. All were written by the system author. |
-| Per-tier precision/recall | MISSING | `run_eval.py` reports only aggregate accuracy (correct/total). No per-tier breakdown. |
-| False-hot vs. false-cold separation | MISSING | Not tracked. |
-| ≥ 5 adversarial/messy leads | PARTIAL | There's 1 prompt-injection case (`cases.py:238`), 1 foreign-language case (`cases.py:299`), 1 empty-message VP case (`cases.py:224`). That's 3, and they're not truly adversarial — they're well-structured with clean fields. No typos, no missing emails, no mixed-language with broken encoding, no real-world messiness. |
-| Trace-shape diversity assertion | MISSING | No assertion on trace shapes in any eval runner. |
+#### K4 — Sentry error tracking: MISSING ENTIRELY
 
-**What's specifically gamed:**
+- No sentry-sdk import or initialization anywhere in the codebase.
+- middleware.py:194-197 — global_exception_handler logs via logger.exception()
+  but never surfaces to an error-tracking system.
+- No before_send PII scrubbing hook.
+- No environment/release tagging.
+- Cold start is clean by accident (nothing Sentry-related exists to break).
 
-1. **Leads designed to satisfy rules:** Every lead in `cases.py` and `holdout.py`
-   has perfectly formatted fields. Company names contain industry keywords
-   ("Fintech", "Healthcare", "Cloud Tech") that map exactly to the enrichment
-   regex. Seniority is always in the name field ("VP of Sales", "CTO", "Manager").
-   These leads were written to be parseable by the regex enrichment, not to
-   represent real-world inbound.
+#### K5 — Alerting hooks: MISSING ENTIRELY
 
-2. **Holdout is not independent:** `holdout.py:1-7` says "written AFTER the 4
-   rules were finalized" — but by the same person who wrote the rules. The leads
-   follow the same patterns: clean email + clear title + industry keyword in
-   company name + intent keyword in message. This is not a holdout; it's more
-   training data.
+- resilience.py:119-123 — CircuitBreaker._on_failure() calls logger.warning(...)
+  directly, hard-coded, non-injectable. There is no AlertHook protocol, no
+  LogAlertHook, no WebhookAlertHook.
+- CircuitBreaker.__init__ (resilience.py:76-83) has no alert_hook kwarg.
+- No rolling error-rate counter exists anywhere.
+- No ALERT_WEBHOOK_URL, ALERT_ERROR_RATE_THRESHOLD, or ALERT_COOLDOWN_SECONDS
+  env vars are consumed.
+- The current logger.warning in _on_failure is not testable without patching the
+  logger global; it cannot be swapped for a webhook without modifying the class.
 
-3. **Mock-only CI gate:** `run_eval.py` runs with `provider="mock"`, which means
-   the LLM loop agent uses mock responses (not real LLM calls). The eval tests
-   the *rules*, not the *agent*. The agent's ability to reason, adapt, or handle
-   unexpected inputs is never tested.
+#### K6 — OpenTelemetry instrumentation: MISSING ENTIRELY
+
+- No OTel SDK initialization, no TracerProvider, no MeterProvider.
+- No manual spans in executor.py, loop_agent.py, or llm_client.py.
+- No OTLP_ENDPOINT env var consumed anywhere.
+- No OTel trace-id in log output or trace store.
+- loop_agent.py:377-382 — Langfuse is used as a lightweight trace wrapper
+  (langfuse_wrapper.py), but this is a product-specific LLM observability layer.
+  It does not produce W3C-compatible distributed traces or OTLP-exportable spans
+  for standard infra tooling (Jaeger, Grafana Tempo, Honeycomb).
+
+#### K7 — Outcome-loop stub: MISSING ENTIRELY
+
+- trace/store.py:19-50 — TraceStore.__init__ creates three tables: trace_events,
+  idempotency_keys, daily_usage. No outcomes table.
+- No POST /outcomes/{run_id} endpoint in api.py.
+- No GET /metrics/outcomes endpoint.
+- No actual_outcome column or model field anywhere in the codebase.
+
+#### Cross-cutting constraint violations
+
+1. middleware.py:36 — _PUBLIC_PATHS is missing /ready, /metrics, and
+   /metrics/outcomes. All three must be public per the K spec. This is a
+   single-line change but must be made before K1/K3/K7 endpoints are wired.
+2. trace/store.py:156-162 — list_runs() stores lead_email in the result dict
+   returned by GET /runs. The run_end payload at loop_agent.py:580 also stores
+   lead_email, meaning GET /runs/{run_id} responses expose PII. Under K2 and K7,
+   this pattern must not be replicated in log records, metric labels, or the
+   outcomes table.
+3. Zero observability-specific tests exist. test_api_hardening.py and
+   test_reliability.py cover auth and rate-limiting but none of K1-K7. Each
+   subsystem requires at least one unit test verifying correct behavior without
+   the external dependency present.
 
 ---
 
-## Summary Verdict
+### Median-fallback confession
 
-| Gap | Status | Severity |
-|-----|--------|----------|
-| 1. Input Extraction | ENTIRELY MISSING | Medium — can be added without disrupting existing code |
-| 2. Real Enrichment | FAKE — keyword guessing, no external data | High — core value proposition is fabricated |
-| 3a. Agentic Loop | SCRIPTED — numbered state machine in prompt | High — "agentic" claim is false |
-| 3b. Eval Quality | GAMED — author-written, no per-tier metrics | High — can't trust accuracy numbers |
+A median implementation would:
+- Rename /health to /ready and call it done — same no-I/O implementation,
+  different route. The frontier bar requires opposite semantics: /ready does
+  actual dependency checks; /health must not.
+- Add logger.info(f"request_id={uuid4()}") at the top of each endpoint handler
+  and call it "request correlation." The frontier requires a middleware Filter
+  that injects request_id into every log record emitted during the request,
+  including records from nested calls in run_triage() and tool executors.
+- Return a JSON dict from /metrics instead of Prometheus exposition format.
+  Prometheus cannot scrape JSON; the text format spec is not optional.
+- Add sentry_sdk.capture_exception(e) only inside global_exception_handler.
+  This misses handled errors, context breadcrumbs, and the PII scrubbing hook
+  required before events leave the process.
+- Add a logger.warning call directly in the circuit breaker and call it alerting.
+  The frontier requires an injectable hook so tests can verify alert firing
+  without patching the logger, and so a webhook can be swapped in without code changes.
+- Skip OTel and claim Langfuse covers it. Langfuse is a product-specific LLM
+  observability layer; it does not produce OTLP-exportable spans or W3C
+  traceparent headers for standard infra tooling.
+- Skip the outcomes table and note it can be added later. K7 is intentionally a
+  stub — the bar is minimal (one table, two endpoints) — but the median skips
+  even this foundation, leaving no path to operational precision measurement.
 
-**Overall:** The system works as a deterministic scoring pipeline with an LLM
-wrapper. That's not nothing — the scoring rules are thoughtful, the trace
-infrastructure is real, the CRM integration works. But the three claims that
-differentiate it (handles unstructured input, enriches with real data, reasons
-agentically) are all false. The enrichment is the most dishonest: the tool is
-named for a capability it doesn't have.
+The median path produces something that looks like observability in a demo but
+provides no operational value: logs you cannot grep, metrics you cannot scrape,
+errors you are not paged on, and no mechanism to measure whether "hot" leads
+actually convert.
 
 ---
 
-## Proposed Phase Plan
+### Verdict
 
-### Phase A: Enrichment Provider Interface + Email Validation (foundation)
-- Create `EnrichmentProvider` ABC + `MockProvider` (demote current regex).
-- Implement email validity: MX/DNS check + disposable-domain blocklist.
-- Wire `EnrichLeadTool` to use provider interface.
-- Invalid email → short-circuit in loop agent.
-- Tests: mock provider parity, invalid email short-circuit.
+**NO-GO**
 
-### Phase B: PDL Integration + Waterfall
-- Implement `PDLProvider` (raw `httpx`, free tier).
-- Waterfall: email validity → PDL → company-website fallback.
-- Per-field source + confidence tagging.
-- Response cache (by email, in-memory).
-- Rate-limit guard (100/month counter).
-- Tests: PDL integration (with mocked HTTP), cache behavior, rate limit.
+Zero of seven K sub-requirements are implemented. The codebase has the structural
+prerequisites (circuit breaker, idempotency, trace store, middleware stack, lifespan
+hook) but the observability layer does not exist.
 
-### Phase C: Input Extraction
-- Add `raw_text` field to `TriageRequest`.
-- Extraction step: LLM → strict Pydantic `Lead` schema.
-- Extraction confidence + field sources.
-- Tests: raw email bodies, email-only input, malformed input.
+| Sub-requirement | Status |
+|---|---|
+| K1 /ready readiness probe | NOT STARTED |
+| K2 Structured JSON logging + request-id propagation | NOT STARTED |
+| K3 /metrics Prometheus endpoint | NOT STARTED |
+| K4 Sentry error tracking (no-op default) | NOT STARTED |
+| K5 AlertHook + circuit-open + error-rate alerts | NOT STARTED |
+| K6 OpenTelemetry instrumentation | NOT STARTED |
+| K7 Outcomes table + POST /outcomes + GET /metrics/outcomes | NOT STARTED |
+| Cross-cut: /ready, /metrics, /metrics/outcomes in _PUBLIC_PATHS | NOT STARTED |
 
-### Phase D: De-Script the Loop
-- Rewrite system prompt: tools + decision criteria, no numbered sequence.
-- Add branching logic: invalid email → short-circuit, low-confidence → re-enrich,
-  CRM hit → skip enrich, ambiguous intent → different path.
-- Remove or simplify `_inject_context` — let the agent construct its own args.
-- Tests: trace-shape diversity assertion.
+**Recommended build order (minimum viable K):**
 
-### Phase E: De-Game the Eval
-- Source ≥ 10 leads independently (separate LLM with no knowledge of rules, or
-  anonymized real-world data).
-- Add messy/adversarial cases (typos, missing fields, mixed language, conflicting
-  signals).
-- Per-tier precision/recall reporting.
-- False-hot vs. false-cold separation.
-- Trace-shape diversity check in eval runner.
-
-### Phase F: Integration + Frontier Audit
-- End-to-end test: raw text → extraction → enrichment → agentic triage → CRM update.
-- Re-run frontier-audit against all FRONTIER.md checks.
-- Ship or iterate.
-
-**Dependencies:** A→B (provider interface before PDL). C is independent of A/B.
-D depends on A (needs invalid-email short-circuit). E is independent but should
-follow D (eval tests the new loop). F is last.
-
-**Estimated free-tier cost:** PDL: 100 calls/month (sufficient for eval + demo).
-OpenAI: extraction step adds ~1 LLM call per lead. Within existing daily cap.
+1. K2 first — structured logging + request-id is the prerequisite for everything
+   else. Once log records carry request_id and run_id, all other subsystems become
+   testable in isolation.
+2. K1 — add ping() to TraceStore and CRM base classes, implement /ready, add to
+   _PUBLIC_PATHS. Low-risk, high-impact.
+3. K3 — build in-process counter registry, wire middleware for request counts and
+   latency, wire run_triage() for triage counts and duration. Add /metrics to
+   _PUBLIC_PATHS.
+4. K5 — refactor CircuitBreaker to accept injectable alert_hook kwarg, add rolling
+   error-rate tracker in the metrics layer, implement WebhookAlertHook.
+5. K4 — add optional sentry-sdk dep with try/except ImportError guard, initialize
+   in _lifespan, write and unit-test before_send PII scrubber.
+6. K7 — add outcomes table migration to TraceStore.__init__, implement two
+   endpoints, add /metrics/outcomes to _PUBLIC_PATHS. Lowest complexity.
+7. K6 — add OTel as optional dep with try/except ImportError degradation, implement
+   NoOpTracerProvider fallback in _lifespan, add manual spans in executor and
+   llm_client, inject trace-id into K2 structured log records.

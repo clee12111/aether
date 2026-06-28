@@ -185,3 +185,59 @@ Lead messages are ATTACKER-CONTROLLED text that flows into: (1) LLM extraction +
 ### COMPLIANCE.md
 - Data collected, lawful basis (legitimate interest Art. 6(1)(f)), retention, deletion path,
   sub-processors (OpenAI, PDL, HubSpot, Neon), PII minimization.
+
+## 2026-06-27 — Phase K: Production observability
+
+### K1 — Readiness vs. liveness
+- `/health` remains pure liveness (no I/O, always 200).
+- `/ready` checks trace store + CRM via `ping()` (SELECT 1). Returns per-dependency status JSON.
+  Enrichment unavailability is degraded, not down. Public (no auth).
+
+### K2 — Structured JSON logging
+- `JSONFormatter` (default) and `TextFormatter` (`LOG_FORMAT=text`).
+- `contextvars.ContextVar` propagates `request_id` (UUID per request, assigned in
+  `RequestIdMiddleware`) and `run_id` into every log record.
+- `otel_trace_id` injected when OTel is active. All three IDs correlate in log output.
+- **No PII at INFO**: email, name, company, message never appear in log fields.
+  `run_start` logs source + run_id + request_id. `run_end` logs tier + route + steps.
+
+### K3 — Prometheus metrics
+- `GET /metrics` returns `text/plain; version=0.0.4` Prometheus exposition format. Public.
+- In-process counters/gauges/histograms (thread-safe, no SQL on scrape except one daily-cap read).
+- Counters: `gtm_requests_total`, `gtm_request_errors_total`, `gtm_triage_total`,
+  `gtm_cache_hit_total`, `gtm_cache_miss_total`.
+- Gauges: `gtm_circuit_breaker_state`, `gtm_daily_cap_used`, `gtm_daily_cap_limit`.
+- Histograms: `gtm_request_duration_seconds`, `gtm_triage_duration_seconds`.
+- No cardinality bombs (labels are bounded enums, never user strings/IDs).
+
+### K4 — Sentry (soft dep, no-op without DSN)
+- `sentry-sdk` is a soft dependency (`try/except ImportError`). `SENTRY_DSN` unset → true no-op.
+- `before_send` hook scrubs PII (email → `[email]`, name/company/message → `[scrubbed]`).
+- Environment tagging via `APP_ENV`, release via `SENTRY_RELEASE`.
+- `traces_sample_rate` defaults to 0.0 (error-only).
+
+### K5 — AlertHook protocol
+- `AlertHook` protocol with `LogAlertHook` (default) and `WebhookAlertHook` (fire-and-forget
+  background thread, active only when `ALERT_WEBHOOK_URL` is set).
+- `CircuitBreaker` accepts `alert_hook` kwarg; fires `"circuit_open"` on trip.
+- `ErrorRateMonitor`: rolling 1-min error rate, configurable threshold (default 20%),
+  cooldown (default 300s) prevents alert storms.
+- Circuit breaker state reflected in `gtm_circuit_breaker_state` gauge.
+
+### K6 — OpenTelemetry (soft dep, no-op without OTLP_ENDPOINT)
+- `opentelemetry-sdk` is a soft dependency. No `OTLP_ENDPOINT` → `NoOpTracer`.
+- `traced_span()` context manager creates child spans (or no-ops).
+- OTel trace-id injected into `otel_trace_id_var` for log correlation.
+- FastAPI auto-instrumentation when SDK present.
+
+### K7 — Outcome-loop stub
+- `outcomes` table in TraceStore (CREATE TABLE IF NOT EXISTS). No email stored — run_id only.
+- `POST /outcomes/{run_id}`: write-once (409 on dup, 404 if run unknown).
+  `actual_outcome` enum: converted / no_show / unqualified / unknown.
+- `GET /metrics/outcomes`: precision-against-outcome per tier (empty-safe). Public.
+
+### Cross-cutting
+- `_PUBLIC_PATHS` updated: `/health`, `/ready`, `/metrics`, `/metrics/outcomes`, `/docs`, etc.
+- `RequestIdMiddleware` assigns UUID per request, returns `X-Request-Id` response header.
+- `MetricsMiddleware` records request count, latency, error type per endpoint.
+- 48 new tests covering all K1–K7 subsystems in isolation (no external deps required).

@@ -47,7 +47,19 @@ CREATE TABLE IF NOT EXISTS daily_usage (
 );
 """
 
+_CREATE_OUTCOMES = """
+CREATE TABLE IF NOT EXISTS outcomes (
+    outcome_id     TEXT PRIMARY KEY,
+    run_id         TEXT NOT NULL,
+    predicted_tier TEXT NOT NULL,
+    actual_outcome TEXT NOT NULL,
+    recorded_by    TEXT,
+    recorded_at    TEXT NOT NULL
+);
+"""
+
 _CREATE_IDX = "CREATE INDEX IF NOT EXISTS idx_trace_run ON trace_events(run_id);"
+_CREATE_IDX_OUTCOMES = "CREATE INDEX IF NOT EXISTS idx_outcomes_run ON outcomes(run_id);"
 
 _INSERT = """
 INSERT INTO trace_events
@@ -69,7 +81,9 @@ class TraceStore:
         self._conn.execute(_CREATE_TABLE)
         self._conn.execute(_CREATE_IDEMPOTENCY)
         self._conn.execute(_CREATE_DAILY_USAGE)
+        self._conn.execute(_CREATE_OUTCOMES)
         self._conn.execute(_CREATE_IDX)
+        self._conn.execute(_CREATE_IDX_OUTCOMES)
         self._conn.commit()
 
     def write(
@@ -241,6 +255,87 @@ class TraceStore:
         )
         self._conn.commit()
         return len(run_ids)
+
+    # ── Health check ──────────────────────────────────────────────────────
+
+    def ping(self) -> bool:
+        """Lightweight health check — runs SELECT 1."""
+        try:
+            self._conn.execute("SELECT 1").fetchone()
+            return True
+        except Exception:
+            return False
+
+    # ── Outcome loop (K7 stub) ─────────────────────────────────────────
+
+    def record_outcome(
+        self,
+        run_id: str,
+        predicted_tier: str,
+        actual_outcome: str,
+        recorded_by: str = "",
+    ) -> str:
+        """Record the actual outcome for a triage run. Write-once (raises on dup)."""
+        outcome_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            "INSERT INTO outcomes (outcome_id, run_id, predicted_tier, actual_outcome, recorded_by, recorded_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (outcome_id, run_id, predicted_tier, actual_outcome, recorded_by or "", now),
+        )
+        self._conn.commit()
+        return outcome_id
+
+    def get_outcome(self, run_id: str) -> dict[str, Any] | None:
+        """Return the outcome for a run_id, or None."""
+        row = self._conn.execute(
+            "SELECT * FROM outcomes WHERE run_id = ?", (run_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_outcome_metrics(self) -> dict[str, dict[str, Any]]:
+        """Compute precision-against-outcome per predicted tier.
+
+        Returns empty per-tier objects if no outcomes exist.
+        """
+        # Get all predictions (from idempotency_keys results)
+        pred_rows = self._conn.execute(
+            "SELECT run_id, result FROM idempotency_keys"
+        ).fetchall()
+
+        tier_counts: dict[str, dict[str, int]] = {}
+        for row in pred_rows:
+            result = json.loads(row["result"])
+            tier = result.get("final_tier", "unknown")
+            if tier not in tier_counts:
+                tier_counts[tier] = {"predicted": 0, "with_outcome": 0, "converted": 0}
+            tier_counts[tier]["predicted"] += 1
+
+        # Join with outcomes
+        outcome_rows = self._conn.execute(
+            "SELECT run_id, predicted_tier, actual_outcome FROM outcomes"
+        ).fetchall()
+
+        for row in outcome_rows:
+            tier = row["predicted_tier"]
+            if tier not in tier_counts:
+                tier_counts[tier] = {"predicted": 0, "with_outcome": 0, "converted": 0}
+            tier_counts[tier]["with_outcome"] += 1
+            if row["actual_outcome"] == "converted":
+                tier_counts[tier]["converted"] += 1
+
+        # Compute precision
+        result: dict[str, dict[str, Any]] = {}
+        for tier, counts in sorted(tier_counts.items()):
+            with_outcome = counts["with_outcome"]
+            converted = counts["converted"]
+            result[tier] = {
+                "predicted": counts["predicted"],
+                "with_outcome": with_outcome,
+                "converted": converted,
+                "precision": round(converted / with_outcome, 4) if with_outcome > 0 else None,
+            }
+        return result
 
     def close(self) -> None:
         self._conn.close()

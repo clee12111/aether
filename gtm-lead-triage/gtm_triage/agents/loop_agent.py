@@ -374,12 +374,21 @@ def run_triage(
     """Run the full RAO triage loop on a single lead."""
     run_id = str(uuid.uuid4())
 
+    # Inject run_id into logging context for correlation (K2)
+    from gtm_triage.observability.logging import run_id_var
+    run_id_token = run_id_var.set(run_id)
+
     # Initialize Langfuse trace (no-op if keys absent)
     get_trace_span(run_id, metadata={
         "lead_email": lead.email,
         "provider": provider,
         "model": model,
     })
+
+    logger.info(
+        "run_start",
+        extra={"run_id": run_id, "source": lead.source, "provider": provider},
+    )
 
     # ── Pre-loop signal checks ───────────────────────────────────────────
     pre_signals = _compute_pre_signals(lead)
@@ -573,7 +582,7 @@ def _finalize_trace(
     lead: Lead,
     pre_signals: dict,
 ) -> None:
-    """Write the run_end trace event and close Langfuse."""
+    """Write the run_end trace event, emit structured log, and close Langfuse."""
     trace.write(
         run_id=run_id,
         event_type="run_end",
@@ -587,6 +596,22 @@ def _finalize_trace(
             "pre_signals": pre_signals,
         },
     )
+
+    # Structured run_end log — NO PII (no email, name, company, message)
+    logger.info(
+        "run_end",
+        extra={
+            "run_id": run_id,
+            "final_tier": result.final_tier,
+            "final_route": result.final_route,
+            "trace_path": result.trace_path,
+            "steps_taken": len(result.steps),
+        },
+    )
+
+    # Reset run_id context var
+    from gtm_triage.observability.logging import run_id_var
+    run_id_var.set("")
 
     end_trace(run_id, metadata={
         "lead_email": lead.email,

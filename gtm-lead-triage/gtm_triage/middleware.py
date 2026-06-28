@@ -11,12 +11,16 @@ import hmac
 import logging
 import os
 import time
+import uuid
 from collections import defaultdict
 from typing import Any
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from gtm_triage.observability.logging import request_id_var
+from gtm_triage.observability.metrics import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +37,7 @@ def error_response(status_code: int, error_type: str, message: str) -> JSONRespo
 # ── Auth middleware ──────────────────────────────────────────────────────────
 
 # Paths that don't require auth
-_PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
+_PUBLIC_PATHS = {"/health", "/ready", "/metrics", "/metrics/outcomes", "/docs", "/openapi.json", "/redoc"}
 
 
 def _check_auth_startup() -> None:
@@ -187,6 +191,54 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                     f"Request body exceeds {_MAX_BODY_BYTES} bytes",
                 )
         return await call_next(request)
+
+
+# ── Request-id + metrics middleware ─────────────────────────────────────────
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """Assigns a request_id UUID to every inbound request.
+
+    Stores it in request.state.request_id and injects it into the
+    contextvars-based logging system so all downstream log records carry it.
+    """
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        rid = str(uuid.uuid4())
+        request.state.request_id = rid
+        token = request_id_var.set(rid)
+        try:
+            response = await call_next(request)
+            response.headers["X-Request-Id"] = rid
+            return response
+        finally:
+            request_id_var.reset(token)
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Records per-request metrics: count, latency, errors."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        start = time.monotonic()
+        metrics.record_request(start)
+
+        response = await call_next(request)
+
+        duration = time.monotonic() - start
+        endpoint = request.url.path
+        method = request.method
+        status = str(response.status_code)
+
+        metrics.requests_total.inc(endpoint=endpoint, method=method, status_code=status)
+        metrics.request_duration_seconds.observe(duration, endpoint=endpoint)
+
+        if response.status_code >= 400:
+            error_type = "rate_limited" if response.status_code == 429 else (
+                "client_error" if response.status_code < 500 else "server_error"
+            )
+            metrics.request_errors_total.inc(endpoint=endpoint, error_type=error_type)
+            metrics.record_error(start)
+
+        return response
 
 
 # ── Exception handler (no stack leaks) ───────────────────────────────────────

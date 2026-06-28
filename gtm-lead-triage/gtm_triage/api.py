@@ -36,8 +36,9 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
@@ -139,6 +140,15 @@ _ROUTE_ACTIONS = {
 async def _lifespan(app: FastAPI):
     global _crm, _trace, _executor, _provider, _model, _daily_cap
 
+    # Initialize observability (K2, K4, K6 — all no-op without config)
+    from gtm_triage.observability.logging import setup_logging
+    from gtm_triage.observability.sentry import init_sentry
+    from gtm_triage.observability.tracing import init_tracing
+
+    setup_logging()
+    init_sentry()
+    init_tracing()
+
     _provider = os.environ.get("GTM_PROVIDER", "openai")
     _model = os.environ.get("GTM_MODEL", "gpt-4o-mini")
     _daily_cap = int(os.environ.get("DAILY_QUERY_CAP", "200"))
@@ -160,6 +170,10 @@ async def _lifespan(app: FastAPI):
         _trace = PostgresTraceStore(database_url)
     else:
         _trace = TraceStore(trace_path)
+
+    # Set daily cap gauge
+    from gtm_triage.observability.metrics import metrics as _metrics
+    _metrics.daily_cap_limit.set(float(_daily_cap))
 
     # Build enrichment provider based on ENRICHMENT_PROVIDER env
     enrichment_backend = os.environ.get("ENRICHMENT_PROVIDER", "mock")
@@ -195,7 +209,9 @@ app = FastAPI(
 # ── Middleware stack (order matters: outermost first) ─────────────────────────
 from gtm_triage.middleware import (
     AuthMiddleware,
+    MetricsMiddleware,
     RateLimitMiddleware,
+    RequestIdMiddleware,
     RequestSizeLimitMiddleware,
     global_exception_handler,
 )
@@ -213,10 +229,12 @@ app.add_middleware(
     allow_headers=["Authorization", "X-API-Key", "Content-Type"],
 )
 
-# Auth → rate limit → size limit (inside-out execution order)
+# Execution order (inside-out): RequestId → Auth → RateLimit → SizeLimit → Metrics
+app.add_middleware(MetricsMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(AuthMiddleware)
+app.add_middleware(RequestIdMiddleware)
 
 # Global exception handler — no stack leaks
 app.add_exception_handler(Exception, global_exception_handler)
@@ -245,6 +263,102 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/ready")
+def ready() -> JSONResponse:
+    """Readiness probe — checks actual dependency health.
+
+    Returns 200 + {"ready": true} when core deps (trace, CRM) are up.
+    Returns 503 + {"ready": false} when a core dep is down.
+    Enrichment unavailability is degraded, not down.
+    """
+    checks: dict[str, str] = {}
+
+    trace_ok = _trace.ping() if _trace else False
+    checks["trace"] = "ok" if trace_ok else "fail"
+
+    crm_ok = _crm.ping() if _crm else False
+    checks["crm"] = "ok" if crm_ok else "fail"
+
+    # Enrichment is optional — degraded, not down
+    enrichment_backend = os.environ.get("ENRICHMENT_PROVIDER", "mock")
+    checks["enrichment"] = "ok" if enrichment_backend == "mock" else "degraded"
+
+    core_ready = trace_ok and crm_ok
+    body = {"ready": core_ready, "checks": checks}
+    status_code = 200 if core_ready else 503
+    return JSONResponse(content=body, status_code=status_code)
+
+
+@app.get("/metrics")
+def get_metrics() -> Response:
+    """Prometheus-format metrics scrape target (public, no auth)."""
+    from gtm_triage.observability.metrics import render_metrics
+    daily_used = _trace.get_daily_usage() if _trace else 0
+    body = render_metrics(daily_cap_used=daily_used, daily_cap_limit=_daily_cap)
+    return Response(content=body, media_type="text/plain; version=0.0.4")
+
+
+@app.get("/metrics/outcomes")
+def get_outcome_metrics() -> dict[str, Any]:
+    """Precision-against-outcome per tier (public, no auth).
+
+    Returns empty per-tier objects if no outcomes have been recorded.
+    """
+    if not _trace or not hasattr(_trace, "get_outcome_metrics"):
+        return {}
+    return _trace.get_outcome_metrics()
+
+
+# OUTCOME LOOP STUB — foundation for a future CRM-sync feedback loop.
+# Current implementation is a manual POST; a future phase would auto-sync
+# from HubSpot deal-close webhooks.
+
+_VALID_OUTCOMES = {"converted", "no_show", "unqualified", "unknown"}
+
+
+class OutcomeRequest(BaseModel):
+    actual_outcome: str = Field(..., description="Outcome of the triage prediction")
+    recorded_by: str = Field(default="", description="Who/what recorded this", max_length=100)
+
+    @field_validator("actual_outcome")
+    @classmethod
+    def outcome_valid(cls, v: str) -> str:
+        if v not in _VALID_OUTCOMES:
+            raise ValueError(f"actual_outcome must be one of {_VALID_OUTCOMES}")
+        return v
+
+
+@app.post("/outcomes/{run_id}", status_code=201)
+def record_outcome(run_id: str, req: OutcomeRequest) -> dict[str, Any]:
+    """Record the actual outcome for a triage run (write-once)."""
+    # Check run exists
+    events = _trace.get_run_events(run_id)
+    if not events:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+    # Check for existing outcome (write-once guard)
+    existing = _trace.get_outcome(run_id)
+    if existing is not None:
+        raise HTTPException(status_code=409, detail=f"Outcome already recorded for {run_id}")
+
+    # Get predicted tier from the run result
+    result = _trace.get_result_by_run_id(run_id)
+    predicted_tier = result.get("final_tier", "unknown") if result else "unknown"
+
+    outcome_id = _trace.record_outcome(
+        run_id=run_id,
+        predicted_tier=predicted_tier,
+        actual_outcome=req.actual_outcome,
+        recorded_by=req.recorded_by,
+    )
+    return {
+        "outcome_id": outcome_id,
+        "run_id": run_id,
+        "predicted_tier": predicted_tier,
+        "actual_outcome": req.actual_outcome,
+    }
+
+
 @app.post("/triage")
 async def triage(req: TriageRequest) -> dict[str, Any]:
     # Derive idempotency key if not supplied
@@ -254,9 +368,12 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         idem_key = hashlib.sha256(raw.encode()).hexdigest()
 
     # Check for prior run with this key
+    from gtm_triage.observability.metrics import metrics as _metrics
     prior = _trace.get_by_idempotency_key(idem_key)
     if prior is not None:
+        _metrics.cache_hit_total.inc()
         return prior["result"]
+    _metrics.cache_miss_total.inc()
 
     # Daily cap: if provider is openai but over the cap, fall back to mock
     effective_provider = _provider
@@ -281,10 +398,12 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         eff_executor = _executor  # uses enrichment_provider if configured
 
     # Run the agent off the request thread (pipeline can take ~10s with LLM)
+    import time as _time
     lead = Lead(
         email=req.email, name=req.name, company=req.company,
         message=req.message, source=req.source,
     )
+    t0 = _time.monotonic()
     result = await asyncio.to_thread(
         run_triage,
         lead=lead,
@@ -292,6 +411,15 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         trace=_trace,
         provider=effective_provider,
         model=_model,
+    )
+    triage_duration = _time.monotonic() - t0
+
+    # Record triage metrics
+    _metrics.triage_duration_seconds.observe(triage_duration, provider=effective_provider)
+    _metrics.triage_total.inc(
+        tier=result.final_tier or "unknown",
+        route=result.final_route or "unknown",
+        provider=effective_provider,
     )
 
     # Increment daily usage only for real openai runs

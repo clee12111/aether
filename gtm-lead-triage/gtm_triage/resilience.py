@@ -10,7 +10,7 @@ import logging
 import random
 import time
 from functools import wraps
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +74,7 @@ class CircuitBreaker:
         name: str,
         failure_threshold: int = 5,
         cooldown_seconds: float = 60.0,
+        alert_hook: Any = None,
     ) -> None:
         self.name = name
         self._failure_threshold = failure_threshold
@@ -81,6 +82,7 @@ class CircuitBreaker:
         self._consecutive_failures = 0
         self._last_failure_time = 0.0
         self._state = "closed"
+        self._alert_hook = alert_hook
 
     @property
     def state(self) -> str:
@@ -111,6 +113,11 @@ class CircuitBreaker:
         if self._state in ("half_open",):
             logger.info("Circuit '%s' closed after successful test request", self.name)
         self._state = "closed"
+        try:
+            from gtm_triage.observability.metrics import metrics
+            metrics.circuit_breaker_state.set(0.0, name=self.name)
+        except Exception:
+            pass
 
     def _on_failure(self) -> None:
         self._consecutive_failures += 1
@@ -121,6 +128,23 @@ class CircuitBreaker:
                 "Circuit '%s' OPEN after %d consecutive failures",
                 self.name, self._consecutive_failures,
             )
+            # Fire alert hook if injected
+            if self._alert_hook is not None:
+                try:
+                    self._alert_hook.fire("circuit_open", {
+                        "name": self.name,
+                        "consecutive_failures": self._consecutive_failures,
+                        "cooldown_seconds": self._cooldown,
+                        "ts": time.time(),
+                    })
+                except Exception:
+                    pass  # alert failures never block the caller
+            # Update metrics gauge
+            try:
+                from gtm_triage.observability.metrics import metrics
+                metrics.circuit_breaker_state.set(2.0, name=self.name)
+            except Exception:
+                pass
 
     def reset(self) -> None:
         """Manually reset the breaker (for testing)."""
