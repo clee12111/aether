@@ -1,0 +1,23 @@
+{
+  "query": "Notion product OR launch OR hiring",
+  "results": [
+    {
+      "title": "Notion Launches Notion Mail — a Reimagined Email Client Built on Its Block Editor",
+      "url": "https://www.notion.so/blog/notion-mail-launch",
+      "description": "Notion today launched Notion Mail, a full email client built on its block-based editor, allowing users to draft, organize, and automate email within their workspace. The product enters public beta immediately.",
+      "age": "2026-04-20"
+    },
+    {
+      "title": "Notion Raises Series D at $15B Valuation, Eyes Enterprise Expansion",
+      "url": "https://www.bloomberg.com/news/notion-series-d-2026",
+      "description": "Productivity platform Notion has closed a $350M Series D round at a $15B valuation, led by Sequoia Capital. CEO Ivan Zhao said funds will accelerate enterprise features including advanced permissions, audit logs, and SOC 2 Type II compliance.",
+      "age": "2026-02-05"
+    },
+    {
+      "title": "Notion Expands AI Features with Notion Q&A for Enterprise Knowledge Management",
+      "url": "https://techcrunch.com/2026/05/notion-ai-qa-enterprise",
+      "description": "Notion launched Q&A, an AI-powered knowledge search across all workspace documents, databases, and integrations. Enterprise customers can query across thousands of pages in natural language with cited sources.",
+      "age": "2026-05-12"
+    }
+  ]
+}

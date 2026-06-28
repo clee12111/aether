@@ -76,6 +76,8 @@ class TraceStore:
     """
 
     def __init__(self, db_path: str = ":memory:") -> None:
+        import threading
+        self._lock = threading.Lock()
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute(_CREATE_TABLE)
@@ -100,13 +102,14 @@ class TraceStore:
     ) -> str:
         event_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            _INSERT,
-            (event_id, run_id, event_type, agent,
-             json.dumps(payload, default=str), error,
-             input_tokens, output_tokens, duration_ms, now),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                _INSERT,
+                (event_id, run_id, event_type, agent,
+                 json.dumps(payload, default=str), error,
+                 input_tokens, output_tokens, duration_ms, now),
+            )
+            self._conn.commit()
         return event_id
 
     def get_run_events(self, run_id: str) -> list[dict[str, Any]]:

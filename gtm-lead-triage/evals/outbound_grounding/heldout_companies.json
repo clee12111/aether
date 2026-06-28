@@ -1,0 +1,14 @@
+[
+  {"domain": "figma.com", "persona_role": "Head of Product", "segment": "design"},
+  {"domain": "airtable.com", "persona_role": "Head of Product", "segment": "productivity"},
+  {"domain": "miro.com", "persona_role": "Head of Product", "segment": "collaboration"},
+  {"domain": "amplitude.com", "persona_role": "Head of Product", "segment": "analytics"},
+  {"domain": "segment.com", "persona_role": "Head of Product", "segment": "data"},
+  {"domain": "intercom.com", "persona_role": "Head of Product", "segment": "support"},
+  {"domain": "gitlab.com", "persona_role": "Head of Product", "segment": "devtools"},
+  {"domain": "retool.com", "persona_role": "Head of Product", "segment": "devtools"},
+  {"domain": "launchdarkly.com", "persona_role": "Head of Product", "segment": "devtools"},
+  {"domain": "posthog.com", "persona_role": "Head of Product", "segment": "analytics"},
+  {"domain": "pendo.io", "persona_role": "Head of Product", "segment": "product_analytics"},
+  {"domain": "loom.com", "persona_role": "Head of Product", "segment": "collaboration"}
+]

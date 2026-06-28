@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GTM_PROVIDER: mock
+      CRM_BACKEND: sqlite
+      GTM_CRM_DB: ":memory:"
+      GTM_TRACE_DB: ":memory:"
+      APOLLO_SOURCE: fixture
+      PRODUCTBOARD_SOURCE: fixture
+      SEARCH_PROVIDER: fixture
+      ENRICHMENT_PROVIDER: mock
+      # COMPANY_RESEARCH defaults to on; tests handle fixture mode
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          cd gtm-lead-triage
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-timeout
+
+      - name: Run tests
+        run: |
+          cd gtm-lead-triage
+          python -m pytest --tb=short -q
+
+      - name: Run eval gate
+        run: |
+          cd gtm-lead-triage
+          python -m evals.run_eval

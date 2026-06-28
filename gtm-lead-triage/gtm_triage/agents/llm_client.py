@@ -55,6 +55,60 @@ def _extract_pre_signal(user_prompt: str, key: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _mock_outbound_response(system: str, user: str) -> str:
+    """Generate deterministic AgentAction JSON for the outbound motion.
+
+    Tool sequence: research_company → fit_score → draft_outbound (if hot/warm) → finalize.
+    """
+    prior_tools = _extract_prior_tools(user)
+
+    if "research_company" not in prior_tools:
+        return json.dumps({
+            "reasoning": "First step: research the target company.",
+            "tool": "research_company",
+            "tool_args": {},
+            "is_final": False,
+        })
+
+    if "fit_score" not in prior_tools:
+        return json.dumps({
+            "reasoning": "Research complete. Scoring ICP fit.",
+            "tool": "fit_score",
+            "tool_args": {},
+            "is_final": False,
+        })
+
+    # Check fit tier — skip draft for cold/disqualified
+    score_obs = _extract_last_observation(user, "fit_score")
+    tier = "unknown"
+    tier_match = re.search(r'"tier":\s*"(\w+)"', score_obs)
+    if tier_match:
+        tier = tier_match.group(1)
+
+    if tier in ("cold", "disqualified"):
+        return json.dumps({
+            "reasoning": f"Company scored as {tier}. No outreach needed. Finalizing.",
+            "tool": "",
+            "tool_args": {},
+            "is_final": True,
+        })
+
+    if "draft_outbound" not in prior_tools:
+        return json.dumps({
+            "reasoning": "Company is warm or hot. Drafting outbound variants.",
+            "tool": "draft_outbound",
+            "tool_args": {},
+            "is_final": False,
+        })
+
+    return json.dumps({
+        "reasoning": "Outbound triage complete.",
+        "tool": "",
+        "tool_args": {},
+        "is_final": True,
+    })
+
+
 def _mock_response(system: str, user: str) -> str:
     """Generate deterministic AgentAction JSON based on lead facts, pre-signals, and step history.
 
@@ -62,6 +116,10 @@ def _mock_response(system: str, user: str) -> str:
     and tool observations (CRM hit, enrichment confidence). Different leads produce
     different trace shapes.
     """
+    # Detect outbound motion by system prompt
+    if "outbound-campaign agent" in system:
+        return _mock_outbound_response(system, user)
+
     lead_block = _extract_lead_block(user)
     prior_tools = _extract_prior_tools(user)
 

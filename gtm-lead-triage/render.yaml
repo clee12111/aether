@@ -7,22 +7,54 @@ services:
     region: oregon
     plan: free
     envVars:
+      # Core (demo = auth OFF, protected by cap + rate limit + CORS)
       - key: APP_ENV
         value: demo
       - key: GTM_PROVIDER
         value: openai
+      - key: GTM_MODEL
+        value: gpt-5.4-nano
+      - key: OPENAI_API_KEY
+        sync: false
+      # Persistence (Postgres for both CRM + trace)
+      - key: DATABASE_URL
+        sync: false
       - key: CRM_BACKEND
         value: sqlite
+      # Apollo population
+      - key: APOLLO_SOURCE
+        value: live
+      - key: APOLLO_API_KEY
+        sync: false
+      # Enrichment (set to pdl when PDL_API_KEY is configured)
       - key: ENRICHMENT_PROVIDER
         value: pdl
       - key: PDL_API_KEY
         sync: false
-      - key: OPENAI_API_KEY
+      # Company research
+      - key: COMPANY_RESEARCH
+        value: "on"
+      - key: SEARCH_PROVIDER
+        value: off
+      - key: BRAVE_API_KEY
         sync: false
-      - key: DATABASE_URL
+      # Productboard (live requires Public API token from Team plan+)
+      - key: PRODUCTBOARD_SOURCE
+        value: fixture
+      - key: PRODUCTBOARD_TOKEN
         sync: false
+      # Auth + rate limiting (GTM_API_KEYS unset = auth disabled in demo mode)
+      # Set GTM_API_KEYS + APP_ENV=production to enable fail-closed auth
+      - key: GTM_API_KEYS
+        sync: false
+      - key: DAILY_QUERY_CAP
+        value: "200"
+      - key: GTM_RATE_LIMIT_RPM
+        value: "60"
+      # CORS
       - key: FRONTEND_ORIGIN
         sync: false
+      # Observability (all no-op without config)
       - key: LANGFUSE_PUBLIC_KEY
         sync: false
       - key: LANGFUSE_SECRET_KEY

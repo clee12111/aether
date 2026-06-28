@@ -1,0 +1,23 @@
+{
+  "query": "Datadog product OR launch OR hiring",
+  "results": [
+    {
+      "title": "Datadog Launches AI-Powered Root Cause Analysis for Cloud Infrastructure",
+      "url": "https://www.datadoghq.com/blog/ai-root-cause-analysis/",
+      "description": "Datadog today announced Bits AI Root Cause Analysis, an AI-powered feature that automatically identifies the root cause of infrastructure incidents, reducing mean time to resolution by up to 60%.",
+      "age": "2026-05-15"
+    },
+    {
+      "title": "Datadog Reports Q1 2026 Revenue of $780M, Up 28% Year-over-Year",
+      "url": "https://investors.datadoghq.com/q1-2026-earnings",
+      "description": "Datadog reported first quarter 2026 revenue of $780 million, an increase of 28% year-over-year, with operating income of $142 million. The company raised full-year guidance.",
+      "age": "2026-04-28"
+    },
+    {
+      "title": "Datadog Hiring 500+ Engineers Globally as Observability Demand Surges",
+      "url": "https://techcrunch.com/2026/03/datadog-hiring-expansion",
+      "description": "Cloud monitoring leader Datadog is expanding its engineering team with 500+ new hires across offices in New York, Paris, and new sites in Austin and Seoul, citing growing enterprise demand for unified observability.",
+      "age": "2026-03-10"
+    }
+  ]
+}

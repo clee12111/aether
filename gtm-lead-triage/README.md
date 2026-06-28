@@ -1,108 +1,67 @@
-# Aether GTM - Agentic Lead Triage
+# Aether GTM — Agentic Lead Triage
 
-Agentic reasoning for inbound lead triage, with full tracing.
+Agentic reasoning for inbound lead triage — deployed, with real enrichment, a real CRM write, and every step traced.
 
-An AI agent receives an inbound lead, reasons about it step by step (CRM
-lookup, enrichment, scoring, outreach drafting), and routes it to the right
-team. Every reasoning step, tool call, and decision is traced to SQLite and
-optionally to Langfuse. The agent never sends anything - it triages, scores,
-drafts, and hands off.
+An AI agent receives an inbound lead and reasons about it step by step: it reads the message, looks the contact up in the CRM, enriches the company, scores and routes the lead, and drafts outreach — then writes the result to HubSpot. The agent never sends anything; it triages, scores, drafts, and hands off.
+
+> **Live demo:** [aether-c7bg.vercel.app](https://aether-c7bg.vercel.app/) — `/` is the lead form, `/ops` is the operator dashboard.
 
 ## Architecture
 
-The reasoning loop is the same reason-act-observe (RAO) architecture validated
-on the FinQA financial-reasoning benchmark in the core Aether engine (75.5%
-on n=200, table-routed). Here, that proven loop is applied to inbound lead
-triage and validated on its own task: a 22-lead human-labeled qualification
-eval at 95.5% tier accuracy on seen leads, 90% on held-out leads.
+The reasoning loop is the same reason-act-observe (RAO) architecture validated on the FinQA financial-reasoning benchmark in the core Aether engine (75.5% lenient / 68.5% strict, n=200). Here that loop is applied to inbound lead qualification and validated on its own **de-gamed held-out eval**.
 
-**Build the brain. Buy the body.** The decision brain (the RAO agent + eval +
-trace) is built. The orchestration (n8n), CRM (HubSpot), and observability
-(Langfuse) are integrated, not rebuilt.
+**Build the brain, integrate the body.** The decision brain — the RAO agent, its eval, its trace — is built. The CRM (HubSpot), enrichment (People Data Labs), and observability (Langfuse) are integrated through swappable interfaces, not rebuilt.
 
-```mermaid
-flowchart LR
-    subgraph Sources
-        Form[Web form]
-        Email[Email]
-        Chat[Chat]
-    end
+![GTM lead-triage pipeline](docs/pipeline.svg)
 
-    subgraph Orchestration
-        N8N[n8n workflow]
-    end
+## The pipeline
 
-    subgraph Brain ["Aether Agent (built)"]
-        direction TB
-        CRM[CRM Lookup] --> Enrich[Enrich Lead]
-        Enrich --> Score[Score + Route]
-        Score --> Draft[Draft Outreach]
-    end
+| Step | What it does | LLM? |
+| --- | --- | --- |
+| Extract | Read role + intent from the message (structured output) | Yes |
+| CRM lookup | Check for an existing contact | No |
+| Enrich | Real firmographics via a PDL waterfall (email validation → PDL → website read), each field tagged with source + confidence | Optional |
+| Score + route | Deterministic rules + a clamped ±10 LLM nudge → tier + route | Optional |
+| Draft outreach | Template draft, never sends | No |
 
-    subgraph Integrations ["Integrated tools (buy)"]
-        HS[HubSpot CRM]
-        LF[Langfuse Traces]
-    end
+The agent reasons one step at a time and branches on real signals (invalid email short-circuits, low-confidence enrichment digs deeper, ambiguous seniority is gated) — different leads produce different trace shapes. The tools are also exposed as an MCP server (`gtm_triage/mcp_server.py`).
 
-    subgraph Routing
-        AE[AE - immediate]
-        SDR[SDR - nurture]
-        MKT[Marketing - nurture]
-        Drop[Drop]
-    end
+## Eval — de-gamed and honest
 
-    Sources --> N8N
-    N8N -->|POST /triage| Brain
-    Brain -->|write contact| HS
-    Brain -->|trace| LF
-    Brain --> Routing
-```
+- **Held-out set (n=35):** 62.9% tier accuracy, **zero false-hots**, 12.5% false-cold — reproducible (temp-0, byte-identical runs).
+- **Independently labeled:** senior-SDR judgment, not derived from the scoring rules; company names carry no industry-keyword leakage.
+- **Train/dev/test discipline:** a separate dev split for tuning; the held-out set is write-once.
+- **Mock CI gate:** 5/5 deterministic, keyless, runs on every push.
+- **486 tests**, 76% coverage floor enforced in CI.
 
-## The four tools
-
-| Tool | What it does | LLM? |
-|------|-------------|------|
-| `crm_lookup` | Check for existing CRM record | No |
-| `enrich_lead` | Infer industry, size, seniority (regex + LLM fallback) | Optional |
-| `score_lead` | Deterministic rules + bounded LLM adjustment ([-10, +10]) | Optional |
-| `draft_outreach` | Template-based draft email (never sends) | No |
-
-The agent also exposes these as an **MCP server** (`gtm_triage/mcp_server.py`)
-for integration with MCP-compatible clients.
-
-## Eval
-
-- **22 human-labeled leads** (seen): 95.5% tier accuracy, 95.5% route accuracy
-- **10 held-out leads** (unseen, written after rules finalized): 90.0% tier accuracy
-- **Mock CI gate**: 5/5 deterministic leads, runs on every change, no API key needed
-- **Latency**: ~11.6s/lead (OpenAI gpt-4o-mini), ~0s (mock)
-- **Cost**: ~$0.001/lead
-
-The eval labels are human-judgment-first, not derived from the rules. Disagreements
-are documented with root causes. No public lead-qualification benchmark exists;
-these numbers are internal.
+The eval was rebuilt after catching a gamed test set (company names contained the answer the regex keyed on). The de-gamed number is what's reported, false-hot vs. false-cold separately. Full progression in [DECISION.md](DECISION.md).
 
 ## The two-view web app
 
-- **`/`** - Product lead-capture form with preset example leads (hot/warm/cold/spam/opt-out)
-- **`/ops`** - Live ops dashboard: metric strip with tier filters, lead list with
-  search, and a detail panel showing the draft outreach, score breakdown (rules +
-  LLM adjustment), enrichment summary, and the full RAO trace grouped by phase
+- **`/`** — lead form; Company is optional (the system derives it from the email domain). Preset examples for hot / warm / cold / spam / opt-out.
+- **`/ops`** — operator dashboard: tier filters + score sort, the lead list, and a detail panel with the draft, score breakdown, enrichment, and the full RAO trace — plus Langfuse and HubSpot deep links. Delete a lead (CRM + trace) from the panel.
 
-## Tracing and CRM
+## Swappable stack
 
-**Langfuse**: every LLM call is recorded as a generation (model, tokens, latency),
-grouped under one trace per lead. No keys = no-op.
+Each backend sits behind one interface — a new provider is one adapter + an env var (verified in [docs/audit/TRANSFERABILITY_AUDIT.md](docs/audit/TRANSFERABILITY_AUDIT.md)):
 
-**HubSpot**: contacts with custom properties (tier, score, route, industry, seniority,
-activity log). Swappable via `CRM_BACKEND` env; SQLite is the default for local dev.
+| Layer | Built / integrated | Swap to |
+| --- | --- | --- |
+| CRM | HubSpot v3 REST | Salesforce |
+| Enrichment | People Data Labs | Apollo / Clearbit |
+| Model | OpenAI `gpt-4o-mini` | Anthropic |
+| Trace store | Postgres (Neon) | SQLite |
+
+## Production hardening
+
+Auth (fail-closed in production), per-IP rate limiting, request size limits, an SSRF guard on the website fetch, prompt-injection containment (the lead message can never reach the tier — the deterministic scorer is the backstop), retries + circuit breakers + graceful degradation on every external call, right-to-erasure (`DELETE /contacts/{email}`), structured JSON logging with correlation IDs, **OpenTelemetry**, **Sentry**, a Prometheus `/metrics` endpoint, `/ready` health checks, and a GitHub Actions pipeline that runs the test suite + eval gate on every push.
 
 ## Running locally
 
 ```bash
 cd gtm-lead-triage
 
-# Terminal 1: API (defaults to openai; mock if no OPENAI_API_KEY)
+# Terminal 1: API (falls back to mock if no OPENAI_API_KEY)
 python -m uvicorn gtm_triage.api:app --host 127.0.0.1 --port 8000
 
 # Terminal 2: frontend
@@ -115,28 +74,28 @@ Open http://localhost:3000 (form) and http://localhost:3000/ops (dashboard).
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `GTM_PROVIDER` | `openai` | `openai` or `mock` |
-| `GTM_MODEL` | `gpt-4o-mini` | Model for OpenAI provider |
-| `OPENAI_API_KEY` | - | Required for openai provider |
+| `GTM_PROVIDER` | `openai` | `openai`, `anthropic`, or `mock` |
+| `GTM_MODEL` | `gpt-4o-mini` | Model for the chosen provider |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | - | Required for the real provider |
+| `ENRICHMENT_PROVIDER` | `mock` | `pdl` or `mock` |
+| `PDL_API_KEY` | - | People Data Labs key (for real enrichment) |
 | `CRM_BACKEND` | `sqlite` | `sqlite` or `hubspot` |
 | `HUBSPOT_TOKEN` | - | HubSpot Private App token |
-| `DAILY_QUERY_CAP` | `200` | Max OpenAI triage runs per UTC day |
-| `LANGFUSE_PUBLIC_KEY` | - | Langfuse public key (optional) |
-| `LANGFUSE_SECRET_KEY` | - | Langfuse secret key (optional) |
-| `LANGFUSE_BASE_URL` | - | Langfuse host URL (optional) |
-| `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS allowed origins |
 | `DATABASE_URL` | - | Postgres DSN (uses SQLite if absent) |
+| `APP_ENV` | - | `production` enables fail-closed auth |
+| `GTM_API_KEYS` | - | Comma-separated API keys (required if `APP_ENV=production`) |
+| `DAILY_QUERY_CAP` | `200` | Max real LLM runs per UTC day (falls back to mock) |
+| `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS allowed origin |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_BASE_URL` | - | Langfuse (optional) |
 
 ## Deploy
 
-See [DEPLOY.md](DEPLOY.md) for click-by-click instructions:
-Neon (Postgres) + Render (API) + Vercel (frontend).
+See [DEPLOY.md](DEPLOY.md): Neon (Postgres) + Render (API, Docker) + Vercel (frontend).
 
 ## Scope guardrails
 
-- **Draft-only**: outreach is drafted, never sent
-- **No LangChain**: direct SDK, every decision is visible code
-- **Daily LLM cap**: falls back to mock (free, deterministic) when the daily
-  OpenAI quota is exhausted - the app never errors
-- **Eval-gated**: the 5-lead mock CI gate runs on every change; no API key needed
-- **Idempotent**: duplicate submissions return the cached result
+- **Draft-only:** outreach is drafted, never sent.
+- **Deterministic decision:** the scorer owns the tier; the LLM only gets a clamped nudge.
+- **No LangChain:** direct SDK, every decision is visible code.
+- **Daily LLM cap:** falls back to mock (free, deterministic) when the quota is exhausted — the app never errors.
+- **Idempotent:** duplicate submissions return the cached result; the CRM dedupes by email.

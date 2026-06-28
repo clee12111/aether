@@ -1,0 +1,158 @@
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+Failed to export span batch code: None, reason: No connection adapters were found for '"https://us.cloud.langfuse.com"/api/public/otel/v1/traces'
+
+================================================================================
+  GTM Lead-Triage Eval — 22 golden leads, provider=openai, model=gpt-4o-mini
+================================================================================
+
+  #   Email                                         Expected                Got  Tier  Route
+  --- ----------------------------------- ------------------ ------------------ ----- ------
+  1   j.martinez@acmefintech.com            hot/ae_immediate   hot/ae_immediate    OK     OK
+  2   mark.chen@cloudtechgroup.com          warm/sdr_nurture   warm/sdr_nurture    OK     OK
+  3   alex.kumar@smallstartup.io          cold/marketing_nurture cold/marketing_nurture    OK     OK
+  4   randomuser123@gmail.com              disqualified/drop  disqualified/drop    OK     OK
+  5   sarah.jones@gmail.com                 warm/sdr_nurture   warm/sdr_nurture    OK     OK
+  6   s.chen@medvista.com                   hot/ae_immediate   hot/ae_immediate    OK     OK
+  7   m.rodriguez@datastream.io             hot/ae_immediate   hot/ae_immediate    OK     OK
+  8   l.park@meridianpartners.com           warm/sdr_nurture   warm/sdr_nurture    OK     OK
+  9   j.wu@pacificcommerce.com              warm/sdr_nurture   warm/sdr_nurture    OK     OK
+  10  taylor.kim@stanford.edu             cold/marketing_nurture cold/marketing_nurture    OK     OK
+  11  info@randomwebsite.io               cold/marketing_nurture cold/marketing_nurture    OK     OK
+  12  noreply@bounce-system.net            disqualified/drop  disqualified/drop    OK     OK
+  13  promo_king@yahoo.com                 disqualified/drop  disqualified/drop    OK     OK
+  14  david.m@gmail.com                     warm/sdr_nurture   warm/sdr_nurture    OK     OK [review]
+  15  anna.lee@brightpath.com               warm/sdr_nurture   warm/sdr_nurture    OK     OK [review]
+  16  r.thompson@globalbank.com             warm/sdr_nurture   warm/sdr_nurture    OK     OK [review]
+  17  test@gmail.com                       disqualified/drop  disqualified/drop    OK     OK
+  18  carlos.r@meridianfinancial.com        hot/ae_immediate   hot/ae_immediate    OK     OK
+  19  maria.g@techcorp.com                 disqualified/drop  disqualified/drop    OK     OK
+  20  founder@tinystartup.co              cold/marketing_nurture   warm/sdr_nurture  MISS   MISS [review]
+  21  jean.d@eurofinance.fr                 warm/sdr_nurture   warm/sdr_nurture    OK     OK [review]
+  22  k.nakamura@bigretail.com              warm/sdr_nurture   warm/sdr_nurture    OK     OK
+
+  ================================================================================
+  AGREEMENT WITH HUMAN LABELS:
+    Tier accuracy:  21/22 (95.5%)
+    Route accuracy: 21/22 (95.5%)
+  ================================================================================
+
+  DISAGREEMENTS (1):
+
+  #20 founder@tinystartup.co [REVIEW — human label uncertain]
+    Human:  cold/marketing_nurture — VP title at a 3-person company is inflated — everyone is a VP at a tiny startup. Genuine interest bu
+    Agent:  warm/sdr_nurture — pts=60 (rules=55, llm_adj=5)
+    LLM reason: The lead shows interest in understanding pricing, indicating a potential urgency to make a decision.
+
+
+  LLM INFLUENCE (cases where llm_adjustment != 0):
+
+    j.martinez@acmefintech.com: rules=80, llm_adj=+5, total=85
+      reason: The lead expresses an urgent need for a demo, indicating a strong interest and potential for a timely deal.
+    mark.chen@cloudtechgroup.com: rules=58, llm_adj=+2, total=60
+      reason: The lead shows interest in evaluating the platform, indicating potential urgency and a specific use case for a data pipeline.
+    alex.kumar@smallstartup.io: rules=35, llm_adj=+5, total=40
+      reason: The lead shows interest in exploring offerings, indicating potential engagement.
+      enrichment LLM fields: {'industry': 'llm'}
+    randomuser123@gmail.com: rules=0, llm_adj=-10, total=0
+      reason: The use of a personal email address and vague message indicates potential spam or lack of seriousness.
+    sarah.jones@gmail.com: rules=55, llm_adj=+5, total=60
+      reason: The request for pricing on 500 seats indicates a large deal size and strong urgency.
+    s.chen@medvista.com: rules=80, llm_adj=+5, total=85
+      reason: The lead shows strong urgency and a specific timeline for deployment, indicating a high likelihood of a significant deal.
+      enrichment LLM fields: {'company_size': 'llm'}
+    m.rodriguez@datastream.io: rules=80, llm_adj=+5, total=85
+      reason: The lead shows strong urgency and a specific request for a trial, indicating a high likelihood of conversion.
+      enrichment LLM fields: {'company_size': 'llm'}
+    l.park@meridianpartners.com: rules=53, llm_adj=+5, total=58
+      reason: The lead shows strong interest in integration options for advisory clients, indicating potential urgency and a specific use case.
+      enrichment LLM fields: {'industry': 'llm', 'seniority': 'llm'}
+    j.wu@pacificcommerce.com: rules=58, llm_adj=+5, total=63
+      reason: The lead shows strong urgency and specificity in considering the platform for 200 stores, indicating a potentially large deal.
+    taylor.kim@stanford.edu: rules=20, llm_adj=+5, total=25
+      reason: The lead shows strong interest in lead scoring models for academic research, indicating potential for valuable insights and collaboration.
+    noreply@bounce-system.net: rules=15, llm_adj=-10, total=5
+      reason: The email address indicates a potential spam source, which is a significant red flag.
+    david.m@gmail.com: rules=45, llm_adj=+5, total=50
+      reason: The lead shows strong urgency and a specific request for a demo, indicating a high level of interest.
+      enrichment LLM fields: {'industry': 'llm'}
+    anna.lee@brightpath.com: rules=43, llm_adj=+5, total=48
+      reason: The message indicates interest in the platform, suggesting potential urgency and a positive tone.
+    test@gmail.com: rules=0, llm_adj=-10, total=0
+      reason: The lead exhibits spam signals and an opt-out language request, indicating a lack of genuine interest.
+    carlos.r@meridianfinancial.com: rules=90, llm_adj=+5, total=95
+      reason: The lead shows strong urgency and specificity in their request for an upgrade, indicating a high likelihood of conversion.
+    founder@tinystartup.co: rules=55, llm_adj=+5, total=60
+      reason: The lead shows interest in understanding pricing, indicating a potential urgency to make a decision.
+      enrichment LLM fields: {'industry': 'llm', 'company_size': 'llm'}
+    jean.d@eurofinance.fr: rules=55, llm_adj=+5, total=60
+      reason: The lead shows strong urgency and specificity in evaluating the platform for a key department.
+      enrichment LLM fields: {'industry': 'llm', 'company_size': 'llm', 'seniority': 'llm'}
+    k.nakamura@bigretail.com: rules=53, llm_adj=+5, total=58
+      reason: The inquiry about handling large datasets indicates a specific interest and potential for a larger deal.
+
+
+  LATENCY & COST (provider=openai, model=gpt-4o-mini):
+    Median latency per lead: 10006 ms
+    Total cost (all leads):  $0.0207
+    Median cost per lead:    $0.001011
+

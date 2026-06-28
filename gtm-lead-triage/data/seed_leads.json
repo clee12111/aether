@@ -1,0 +1,71 @@
+{
+  "_meta": {
+    "purpose": "Realistic inbound-lead seed across company segments + intents for simulation and enrichment testing.",
+    "privacy": "Real company domains, SYNTHETIC contacts. PDL returns real company firmographics by domain; person-enrichment will find no match (intended) — confidence-gating handles unknown seniority.",
+    "segments": ["enterprise", "scaleup", "midmarket", "startup", "edge"],
+    "ICP": "B2B SaaS product teams (Productboard's buyer). Edge cases test disqualification + fit-scoring.",
+    "usage": "Feed through the existing inbound motion; PDL enriches by domain at runtime. Later loaded by the inbound simulator."
+  },
+  "leads": [
+    {
+      "id": "seed-ent-01", "channel": "web_form", "segment": "enterprise", "expected": "hot",
+      "name": "Marcus Hale", "email": "marcus.hale@datadoghq.com", "company": "Datadog", "domain": "datadoghq.com",
+      "message": "We're scaling our product org past 40 PMs and customer feedback is scattered across Slack, Zendesk, and Gong. We need one source of truth to prioritize the roadmap and want to decide this quarter. Can we get a demo?"
+    },
+    {
+      "id": "seed-ent-02", "channel": "email", "segment": "enterprise", "expected": "warm",
+      "name": "Priya Anand", "email": "priya.anand@atlassian.com", "company": "Atlassian", "domain": "atlassian.com",
+      "message": "Researching how large product orgs centralize feature requests across multiple business units. Early comparison of a few tools, no firm timeline yet."
+    },
+    {
+      "id": "seed-scale-01", "channel": "web_form", "segment": "scaleup", "expected": "hot",
+      "name": "Dana Okafor", "email": "dana.okafor@notion.so", "company": "Notion", "domain": "notion.so",
+      "message": "Our PMs are drowning in feature requests and we keep shipping the wrong things. We want to tie customer feedback directly to roadmap decisions. Looking to move fast — what does onboarding look like?"
+    },
+    {
+      "id": "seed-scale-02", "channel": "chat", "segment": "scaleup", "expected": "warm",
+      "name": "Leah Brooks", "email": "leah.brooks@vercel.com", "company": "Vercel", "domain": "vercel.com",
+      "message": "Interested in how you turn insights from sales calls into product themes. How does the Gong/Slack ingestion work?"
+    },
+    {
+      "id": "seed-scale-03", "channel": "web_form", "segment": "scaleup", "expected": "cold",
+      "name": "Sam Reyes", "email": "sam.reyes@linear.app", "company": "Linear", "domain": "linear.app",
+      "message": "saw your tool mentioned somewhere, curious what it does"
+    },
+    {
+      "id": "seed-mid-01", "channel": "web_form", "segment": "midmarket", "expected": "warm",
+      "name": "Tomás Vidal", "email": "tomas.vidal@webflow.com", "company": "Webflow", "domain": "webflow.com",
+      "message": "Evaluating feedback-management tools for a 12-person product team. Need roadmap prioritization and a public customer portal. Comparing two vendors this month."
+    },
+    {
+      "id": "seed-start-01", "channel": "email", "segment": "startup", "expected": "hot",
+      "name": "Ravi Menon", "email": "ravi@resend.com", "company": "Resend", "domain": "resend.com",
+      "message": "Small team growing fast — drowning in user requests across Discord and email. Need to organize this before it gets worse. What's pricing for ~5 seats and can we start this week?"
+    },
+    {
+      "id": "seed-start-02", "channel": "web_form", "segment": "startup", "expected": "warm",
+      "name": "Mira Kovac", "email": "mira.kovac@cal.com", "company": "Cal.com", "domain": "cal.com",
+      "message": "Open-source startup, want to track community feature requests from GitHub and Discord. Exploring options, not urgent."
+    },
+    {
+      "id": "seed-edge-free", "channel": "web_form", "segment": "edge", "expected": "cold",
+      "name": "Jordan T", "email": "jordan.builds@gmail.com", "company": "", "domain": "gmail.com",
+      "message": "hi do you guys do product management stuff"
+    },
+    {
+      "id": "seed-edge-spam", "channel": "email", "segment": "edge", "expected": "disqualified",
+      "name": "Growth Team", "email": "offers@rank-boost-pro.biz", "company": "RankBoost Pro", "domain": "rank-boost-pro.biz",
+      "message": "Boost your SEO rankings 10x guaranteed! Limited-time free audit — click here to claim your spot before midnight!!!"
+    },
+    {
+      "id": "seed-edge-optout", "channel": "email", "segment": "edge", "expected": "disqualified",
+      "name": "K. Fenwick", "email": "k.fenwick@shopify.com", "company": "Shopify", "domain": "shopify.com",
+      "message": "Please remove me from all marketing communications immediately and confirm deletion of my data under GDPR."
+    },
+    {
+      "id": "seed-edge-nonicp", "channel": "web_form", "segment": "edge", "expected": "cold",
+      "name": "Elena Marsh", "email": "elena.marsh@bluebottlecoffee.com", "company": "Blue Bottle Coffee", "domain": "bluebottlecoffee.com",
+      "message": "We collect customer comment cards at our cafes and want to digitize the feedback. Is your tool a fit for a coffee retail chain?"
+    }
+  ]
+}

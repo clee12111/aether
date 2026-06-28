@@ -34,6 +34,7 @@ import hashlib
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Response
@@ -44,7 +45,7 @@ from pydantic import BaseModel, Field, field_validator
 logger = logging.getLogger(__name__)
 
 from gtm_triage.agents.executor import Executor
-from gtm_triage.agents.loop_agent import run_triage
+from gtm_triage.agents.loop_agent import run_outbound, run_triage
 from gtm_triage.crm.base import CRMStore
 from gtm_triage.crm.hubspot_crm import HubSpotCRM
 from gtm_triage.crm.sqlite_crm import SQLiteCRM
@@ -156,15 +157,20 @@ async def _lifespan(app: FastAPI):
     crm_path = os.environ.get("GTM_CRM_DB", "gtm_crm.db")
     trace_path = os.environ.get("GTM_TRACE_DB", "gtm_trace.db")
 
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+
     if crm_backend == "hubspot":
         token = os.environ.get("HUBSPOT_TOKEN", "").strip()
         if not token:
             raise RuntimeError("CRM_BACKEND=hubspot requires HUBSPOT_TOKEN env var")
         _crm = HubSpotCRM(token)
+    elif database_url:
+        # Postgres CRM shares the same DATABASE_URL as the trace store
+        from gtm_triage.crm.pg_crm import PostgresCRM
+        _crm = PostgresCRM(database_url)
     else:
         _crm = SQLiteCRM(crm_path)
 
-    database_url = os.environ.get("DATABASE_URL", "").strip()
     if database_url:
         from gtm_triage.trace.pg_store import PostgresTraceStore
         _trace = PostgresTraceStore(database_url)
@@ -462,6 +468,7 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         "tier": result.final_tier,
         "route": result.final_route,
         "run_id": result.run_id,
+        "source": lead.source or "web_form",
     }
     if result.score:
         crm_data["score"] = result.score.get("points", "")
@@ -471,14 +478,82 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
     try:
         _crm.upsert(lead.email, crm_data)
     except Exception as exc:
-        logger.warning("CRM upsert failed for %s: %s", lead.email, exc)
+        logger.warning("CRM upsert failed for run %s: %s", result.run_id[:8], exc)
 
-    # Store idempotency key → result (with provider tag)
+    # Enrich-once: attach company-research brief to the stored result
+    # so downstream outbound can reuse it without re-enriching
+    brief: dict[str, Any] | None = None
+    domain = lead.email.rsplit("@", 1)[1] if "@" in lead.email else ""
+    if domain:
+        try:
+            from gtm_triage.tools.research_company import ResearchCompanyTool
+            research_tool = ResearchCompanyTool(provider="mock")
+            brief = research_tool.run({"domain": domain, "role": "", "email": lead.email})
+        except Exception as exc:
+            logger.debug("Company research for %s failed: %s", domain, exc)
+
+    # Productboard write-back: log the lead's request by domain
+    pb_note: dict[str, Any] | None = None
+    try:
+        from gtm_triage.productboard.writeback import write_lead_to_productboard
+        pb_note = write_lead_to_productboard(
+            email=lead.email, message=lead.message,
+            company=lead.company, name=lead.name,
+            run_id=result.run_id, trace=_trace,
+        )
+    except Exception as exc:
+        logger.debug("PB write-back failed: %s", exc)
+
+    # Store idempotency key -> result (with provider tag + brief + PB note)
     result_dict = result.model_dump()
     result_dict["provider_used"] = effective_provider
+    result_dict["motion"] = "inbound"
+    if brief:
+        result_dict["company_brief"] = brief
+    if pb_note:
+        result_dict["pb_note"] = pb_note
     _trace.store_idempotency_key(idem_key, result.run_id, result_dict)
 
     return result_dict
+
+
+# Manual Productboard send
+class PBSendRequest(BaseModel):
+    email: str = Field(..., max_length=320)
+    content: str = Field(..., max_length=5000)
+    company: str = Field(default="", max_length=500)
+
+
+@app.post("/productboard/send")
+async def send_to_productboard(req: PBSendRequest) -> dict[str, Any]:
+    """Manually send a request to Productboard for a lead."""
+    domain = req.email.rsplit("@", 1)[1].lower() if "@" in req.email else ""
+    if not domain:
+        raise HTTPException(status_code=422, detail="Invalid email")
+
+    pb_source = os.environ.get("PRODUCTBOARD_SOURCE", "fixture").lower()
+    if pb_source == "off":
+        raise HTTPException(status_code=422, detail="Productboard is disabled")
+
+    try:
+        from gtm_triage.productboard import get_productboard_client
+        pb = get_productboard_client()
+        result = pb.create_feedback(
+            title=f"{req.company or domain} - manual request",
+            content=req.content,
+            customer_email=req.email,
+            company_domain=domain,
+            tags=["inbound", "manual"],
+        )
+        return {
+            "note_id": result.id,
+            "note_url": result.display_url,
+            "title": result.name,
+            "domain": domain,
+        }
+    except Exception as exc:
+        logger.warning("Productboard send failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Productboard write failed")
 
 
 @app.post("/deliver")
@@ -567,3 +642,681 @@ def delete_contact(email: str) -> dict[str, Any]:
         "crm_record_deleted": crm_deleted,
         "trace_runs_deleted": trace_runs_deleted,
     }
+
+
+# ── Outbound motion endpoints ──────────────────────────────────────────────
+
+from gtm_triage.models.campaign import Campaign, OutboundTarget
+from gtm_triage.tools.draft_outbound import DraftOutboundTool
+from gtm_triage.tools.fit_score import FitScoreTool
+from gtm_triage.tools.research_company import ResearchCompanyTool
+
+_OUTBOUND_BATCH_CAP = 25
+
+
+class CampaignRequest(BaseModel):
+    name: str = Field(..., max_length=200)
+    icp_keywords: list[str] = Field(default_factory=list)
+    icp_employee_ranges: list[str] = Field(default_factory=list)
+    value_prop: str = Field(default="", max_length=_MAX_MESSAGE_LEN)
+    target_persona: str = Field(default="", max_length=_MAX_FIELD_LEN)
+
+
+class OutboundTargetRequest(BaseModel):
+    company: str = Field(..., max_length=_MAX_FIELD_LEN)
+    domain: str = Field(..., max_length=320)
+    persona_role: str = Field(default="Head of Product", max_length=_MAX_FIELD_LEN)
+    campaign: CampaignRequest
+    email: str | None = Field(default=None, max_length=320)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+    @field_validator("domain")
+    @classmethod
+    def domain_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("domain must not be empty")
+        return v.strip()
+
+
+class ApolloSourceConfig(BaseModel):
+    keyword_tags: list[str] = Field(default_factory=list)
+    employee_ranges: list[str] = Field(default_factory=list)
+    limit: int = Field(default=10, ge=1)
+
+
+class OutboundCampaignRequest(BaseModel):
+    campaign: CampaignRequest
+    source: dict[str, ApolloSourceConfig] = Field(default_factory=dict)
+    persona_role: str = Field(default="Head of Product", max_length=_MAX_FIELD_LEN)
+
+
+def _build_outbound_executor(provider: str, model: str) -> Executor:
+    """Build an executor with outbound tools."""
+    registry = ToolRegistry([
+        ResearchCompanyTool(provider=provider, model=model),
+        FitScoreTool(provider=provider, model=model),
+        DraftOutboundTool(provider=provider, model=model),
+    ])
+    return Executor(registry, _trace)
+
+
+def _run_single_outbound(
+    target: OutboundTarget,
+    effective_provider: str,
+) -> dict[str, Any]:
+    """Run outbound on a single target, with CRM upsert + idempotency. Sync."""
+    import time as _time
+    from gtm_triage.observability.metrics import metrics as _metrics
+
+    executor = _build_outbound_executor(effective_provider, _model)
+
+    t0 = _time.monotonic()
+    result = run_outbound(
+        target=target,
+        executor=executor,
+        trace=_trace,
+        provider=effective_provider,
+        model=_model,
+    )
+    duration = _time.monotonic() - t0
+
+    # Metrics
+    _metrics.triage_duration_seconds.observe(duration, provider=effective_provider)
+    _metrics.triage_total.inc(
+        tier=result.final_tier or "unknown",
+        route=result.final_route or "unknown",
+        provider=effective_provider,
+    )
+
+    # Daily usage
+    if effective_provider != "mock":
+        _trace.increment_daily_usage()
+
+    # CRM: only upsert for standalone outbound targets (not from-lead,
+    # which would overwrite the inbound lead's CRM data)
+    if target.source != "outbound_campaign" or not _crm.lookup(target.email):
+        crm_key = target.email or f"{target.persona_role.lower().replace(' ', '.')}@{target.domain}"
+        crm_data: dict[str, Any] = {
+            "email": crm_key,
+            "name": target.persona_role or target.name,
+            "company": target.company,
+            "tier": result.final_tier,
+            "route": result.final_route,
+            "run_id": result.run_id,
+            "motion": "outbound",
+        }
+        if result.enrichment:
+            crm_data["industry"] = result.enrichment.get("industry", "")
+        if result.score:
+            crm_data["score"] = result.score.get("points", "")
+        try:
+            _crm.upsert(crm_key, crm_data)
+        except Exception as exc:
+            logger.warning("CRM upsert failed for outbound %s: %s", crm_key, exc)
+
+    return result.model_dump()
+
+
+@app.post("/outbound/target")
+async def outbound_target(req: OutboundTargetRequest) -> dict[str, Any]:
+    """Triage a single outbound target: research → fit-score → draft."""
+    # Idempotency
+    idem_key = req.idempotency_key
+    if not idem_key:
+        raw = f"outbound|{req.domain}|{req.persona_role}|{req.campaign.name}"
+        idem_key = hashlib.sha256(raw.encode()).hexdigest()
+
+    from gtm_triage.observability.metrics import metrics as _metrics
+    prior = _trace.get_by_idempotency_key(idem_key)
+    if prior is not None:
+        _metrics.cache_hit_total.inc()
+        return prior["result"]
+    _metrics.cache_miss_total.inc()
+
+    # Daily cap
+    effective_provider = _provider
+    if effective_provider != "mock":
+        used = _trace.get_daily_usage()
+        if used >= _daily_cap:
+            effective_provider = "mock"
+
+    campaign = Campaign(**req.campaign.model_dump())
+    target = OutboundTarget(
+        company=req.company,
+        domain=req.domain,
+        persona_role=req.persona_role,
+        campaign=campaign,
+        email=req.email or f"{req.persona_role.lower().replace(' ', '.')}@{req.domain}",
+        name=req.persona_role,
+    )
+
+    result_dict = await asyncio.to_thread(
+        _run_single_outbound, target, effective_provider,
+    )
+    result_dict["provider_used"] = effective_provider
+
+    # Store idempotency
+    _trace.store_idempotency_key(idem_key, result_dict.get("run_id", ""), result_dict)
+
+    return result_dict
+
+
+@app.post("/outbound/campaign")
+async def outbound_campaign(req: OutboundCampaignRequest) -> dict[str, Any]:
+    """Run outbound on a batch of targets from Apollo search."""
+    # Daily cap check
+    effective_provider = _provider
+    if effective_provider != "mock":
+        used = _trace.get_daily_usage()
+        remaining = max(0, _daily_cap - used)
+        if remaining == 0:
+            effective_provider = "mock"
+    else:
+        remaining = _OUTBOUND_BATCH_CAP
+
+    # Build campaign
+    campaign = Campaign(**req.campaign.model_dump())
+
+    # Source targets from Apollo
+    apollo_config = req.source.get("apollo")
+    if not apollo_config:
+        raise HTTPException(status_code=422, detail="source.apollo is required")
+
+    from gtm_triage.apollo import get_apollo_client
+    apollo = get_apollo_client()
+    batch_limit = min(apollo_config.limit, _OUTBOUND_BATCH_CAP, remaining)
+
+    search_result = apollo.search_organizations(
+        keyword_tags=apollo_config.keyword_tags or None,
+        employee_ranges=apollo_config.employee_ranges or None,
+        per_page=batch_limit,
+    )
+
+    # Build targets from Apollo orgs
+    targets = [
+        OutboundTarget.from_apollo_org(org, req.persona_role, campaign)
+        for org in search_result.organizations[:batch_limit]
+    ]
+
+    # Run each target (sequentially to respect rate limits)
+    results: list[dict[str, Any]] = []
+    for target in targets:
+        # Re-check daily cap per target
+        if effective_provider != "mock":
+            used = _trace.get_daily_usage()
+            if used >= _daily_cap:
+                effective_provider = "mock"
+
+        result_dict = await asyncio.to_thread(
+            _run_single_outbound, target, effective_provider,
+        )
+        result_dict["provider_used"] = effective_provider
+        result_dict["run_type"] = "outbound_campaign"
+        result_dict["motion"] = "outbound"
+        results.append(result_dict)
+
+    # Summary
+    tier_counts: dict[str, int] = {}
+    for r in results:
+        tier = r.get("final_tier") or "unknown"
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+
+    return {
+        "campaign": campaign.name,
+        "targets_searched": search_result.pagination.get("total_entries", 0),
+        "targets_processed": len(results),
+        "provider_used": effective_provider,
+        "tier_summary": tier_counts,
+        "results": results,
+    }
+
+
+@app.get("/outbound/runs/{run_id}")
+def get_outbound_run(run_id: str) -> dict[str, Any]:
+    """Trace for an outbound run — reuses the inbound run reader."""
+    return get_run(run_id)
+
+
+# ── Multi-channel intake endpoints ─────────────────────────────────────────
+
+from gtm_triage.channels.chat import ChatAdapter
+from gtm_triage.channels.clay import ClayWebhookAdapter
+from gtm_triage.channels.email import EmailAdapter
+
+
+class EmailIntakeRequest(BaseModel):
+    raw_email: str = Field(..., description="Raw email text (headers + body)", max_length=50000)
+
+
+class ChatIntakeRequest(BaseModel):
+    transcript: str = Field(..., description="Chat transcript text", max_length=50000)
+
+
+class ClayWebhookRequest(BaseModel):
+    row: dict[str, Any] = Field(..., description="Clay-enriched row (column->value)")
+
+
+async def _run_intake(parsed_lead, effective_provider: str) -> dict[str, Any]:
+    """Shared intake pipeline: parsed Lead -> run_triage -> result dict."""
+    import time as _time
+    from gtm_triage.observability.metrics import metrics as _metrics
+
+    # Idempotency
+    idem_raw = f"{parsed_lead.source}|{parsed_lead.lead.email}|{parsed_lead.lead.message[:100]}"
+    idem_key = hashlib.sha256(idem_raw.encode()).hexdigest()
+
+    prior = _trace.get_by_idempotency_key(idem_key)
+    if prior is not None:
+        _metrics.cache_hit_total.inc()
+        return prior["result"]
+    _metrics.cache_miss_total.inc()
+
+    # Build executor with effective provider
+    if effective_provider != _provider:
+        eff_registry = ToolRegistry([
+            CRMLookupTool(_crm),
+            EnrichLeadTool(provider=effective_provider, model=_model),
+            ScoreLeadTool(provider=effective_provider, model=_model),
+            DraftOutreachTool(),
+        ])
+        eff_executor = Executor(eff_registry, _trace)
+    else:
+        eff_executor = _executor
+
+    t0 = _time.monotonic()
+    result = await asyncio.to_thread(
+        run_triage,
+        lead=parsed_lead.lead,
+        executor=eff_executor,
+        trace=_trace,
+        provider=effective_provider,
+        model=_model,
+    )
+    duration = _time.monotonic() - t0
+
+    _metrics.triage_duration_seconds.observe(duration, provider=effective_provider)
+    _metrics.triage_total.inc(
+        tier=result.final_tier or "unknown",
+        route=result.final_route or "unknown",
+        provider=effective_provider,
+    )
+
+    if effective_provider != "mock":
+        _trace.increment_daily_usage()
+
+    # CRM upsert
+    crm_data: dict[str, Any] = {
+        "email": parsed_lead.lead.email,
+        "name": parsed_lead.lead.name,
+        "company": parsed_lead.lead.company,
+        "tier": result.final_tier,
+        "route": result.final_route,
+        "run_id": result.run_id,
+        "motion": "inbound",
+        "source": parsed_lead.source,
+    }
+    if result.score:
+        crm_data["score"] = result.score.get("points", "")
+    if result.enrichment:
+        crm_data["industry"] = result.enrichment.get("industry", "")
+    try:
+        _crm.upsert(parsed_lead.lead.email, crm_data)
+    except Exception as exc:
+        logger.warning("CRM upsert failed for %s: %s", parsed_lead.lead.email, exc)
+
+    result_dict = result.model_dump()
+    result_dict["provider_used"] = effective_provider
+    result_dict["source"] = parsed_lead.source
+    result_dict["parsed_lead"] = parsed_lead.lead.model_dump()
+    result_dict["extraction_confidence"] = parsed_lead.extraction_confidence
+    result_dict["field_sources"] = parsed_lead.field_sources
+
+    _trace.store_idempotency_key(idem_key, result.run_id, result_dict)
+    return result_dict
+
+
+def _effective_provider() -> str:
+    """Determine effective provider respecting daily cap."""
+    p = _provider
+    if p != "mock":
+        used = _trace.get_daily_usage()
+        if used >= _daily_cap:
+            p = "mock"
+    return p
+
+
+@app.post("/intake/email")
+async def intake_email(req: EmailIntakeRequest) -> dict[str, Any]:
+    """Intake a raw email → parse → triage."""
+    try:
+        parsed = EmailAdapter().to_lead(req.raw_email)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return await _run_intake(parsed, _effective_provider())
+
+
+@app.post("/intake/chat")
+async def intake_chat(req: ChatIntakeRequest) -> dict[str, Any]:
+    """Intake a chat transcript → parse → triage."""
+    try:
+        parsed = ChatAdapter().to_lead(req.transcript)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return await _run_intake(parsed, _effective_provider())
+
+
+@app.post("/webhooks/clay")
+async def webhook_clay(req: ClayWebhookRequest) -> dict[str, Any]:
+    """Intake a Clay webhook row -> parse -> triage."""
+    try:
+        parsed = ClayWebhookAdapter().to_lead(req.row)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return await _run_intake(parsed, _effective_provider())
+
+
+# ── Journey + from-lead endpoints ──────────────────────────────────────────
+
+
+@app.get("/outbound/by-lead/{email}")
+def get_outbound_for_lead(email: str) -> dict[str, Any]:
+    """Get existing outbound results for a lead WITHOUT re-running.
+
+    Returns outbound_email + outbound_campaign results if they exist.
+    """
+    all_runs = _trace.list_runs(limit=500)
+    lead_runs = [r for r in all_runs if r.get("lead_email", "") == email]
+
+    outbound_results: list[dict[str, Any]] = []
+    for run_summary in lead_runs:
+        stored = _trace.get_result_by_run_id(run_summary["run_id"])
+        if stored and stored.get("motion") == "outbound":
+            outbound_results.append(stored)
+
+    return {"email": email, "results": outbound_results}
+
+
+@app.get("/journey/{email}")
+def get_journey(email: str) -> dict[str, Any]:
+    """Get the full inbound->outbound journey for a lead by email.
+
+    Returns the inbound run + any outbound runs, each with their full traces,
+    as one ordered timeline.
+    """
+    all_runs = _trace.list_runs(limit=500)
+    lead_runs = [r for r in all_runs if r.get("lead_email", "") == email]
+
+    if not lead_runs:
+        raise HTTPException(status_code=404, detail=f"No runs found for {email}")
+
+    journey: list[dict[str, Any]] = []
+    for run_summary in lead_runs:
+        run_id = run_summary["run_id"]
+        events = _trace.get_run_events(run_id)
+        stats = _trace.get_run_stats(run_id)
+        stored_result = _trace.get_result_by_run_id(run_id)
+        journey.append({
+            "run_id": run_id,
+            "motion": stored_result.get("motion", "inbound") if stored_result else "inbound",
+            "run_type": stored_result.get("run_type", "inbound") if stored_result else "inbound",
+            "final_tier": run_summary.get("final_tier"),
+            "final_route": run_summary.get("final_route"),
+            "trace_path": stored_result.get("trace_path", "") if stored_result else "",
+            "started_at": run_summary.get("started_at"),
+            "event_count": len(events),
+            "stats": stats,
+            "events": events,
+            "result": stored_result,
+        })
+
+    return {"email": email, "runs": journey}
+
+
+class FromLeadRequest(BaseModel):
+    email: str = Field(..., max_length=320)
+    campaign: CampaignRequest
+
+
+@app.post("/outbound/from-lead")
+async def outbound_from_lead(req: FromLeadRequest) -> dict[str, Any]:
+    """Build an OutboundTarget from an inbound lead's stored brief, then run outbound."""
+    # Idempotency check (same as /triage and /outbound/target)
+    from gtm_triage.observability.metrics import metrics as _metrics
+    idem_key = hashlib.sha256(
+        f"from-lead|{req.email}|{req.campaign.name}".encode()
+    ).hexdigest()
+    prior = _trace.get_by_idempotency_key(idem_key)
+    if prior is not None:
+        _metrics.cache_hit_total.inc()
+        return prior["result"]
+    _metrics.cache_miss_total.inc()
+
+    # Find the inbound lead's stored result (most recent run for this email)
+    all_runs = _trace.list_runs(limit=200)
+    lead_runs = [r for r in all_runs if r.get("lead_email", "") == req.email]
+    if not lead_runs:
+        raise HTTPException(status_code=404, detail=f"No inbound run found for {req.email}")
+
+    source_run_id = lead_runs[0]["run_id"]
+    stored = _trace.get_result_by_run_id(source_run_id)
+
+    # Look up CRM data for company name
+    crm_record = _crm.lookup(req.email)
+    company = (crm_record or {}).get("company", "")
+    domain = req.email.rsplit("@", 1)[1] if "@" in req.email else ""
+
+    # Build campaign + target
+    campaign = Campaign(**req.campaign.model_dump())
+    target = OutboundTarget(
+        company=company or domain,
+        domain=domain,
+        persona_role=req.campaign.target_persona or "Head of Product",
+        campaign=campaign,
+        email=req.email,
+        name=(crm_record or {}).get("name", ""),
+    )
+
+    effective_provider = _effective_provider()
+    result_dict = await asyncio.to_thread(
+        _run_single_outbound, target, effective_provider,
+    )
+    result_dict["provider_used"] = effective_provider
+    result_dict["source_run_id"] = source_run_id
+    result_dict["motion"] = "outbound"
+    result_dict["run_type"] = "outbound_email"
+
+    # Store with idempotency
+    idem_key = hashlib.sha256(
+        f"from-lead|{req.email}|{req.campaign.name}".encode()
+    ).hexdigest()
+    _trace.store_idempotency_key(idem_key, result_dict.get("run_id", ""), result_dict)
+
+    return result_dict
+
+
+class CompanyCampaignRequest(BaseModel):
+    domain: str = Field(..., max_length=320)
+    company: str = Field(default="", max_length=500)
+    campaign: CampaignRequest
+    apollo_keyword_tags: list[str] = Field(default_factory=list)
+    apollo_employee_ranges: list[str] = Field(default_factory=list)
+    apollo_limit: int = Field(default=3, ge=1)
+
+
+# Keep old endpoint as an alias for backward compat
+class CampaignFromLeadRequest(BaseModel):
+    email: str = Field(..., max_length=320)
+    campaign: CampaignRequest
+    apollo_keyword_tags: list[str] = Field(default_factory=list)
+    apollo_employee_ranges: list[str] = Field(default_factory=list)
+    apollo_limit: int = Field(default=3, ge=1)
+
+
+def _run_domain_campaign(
+    domain: str, company: str, campaign: Campaign,
+    keyword_tags: list[str], employee_ranges: list[str], limit: int,
+) -> dict[str, Any]:
+    """Core campaign logic: Apollo search -> enrich + score + draft per target.
+
+    This does REAL work: finds similar companies, researches each, scores ICP
+    fit, and drafts tailored outreach. Respects daily cap.
+    """
+    from gtm_triage.apollo import get_apollo_client
+    from gtm_triage.tools.research_company import ResearchCompanyTool
+    from gtm_triage.tools.fit_score import FitScoreTool
+    from gtm_triage.tools.draft_outbound import DraftOutboundTool
+
+    run_id = f"campaign-{hashlib.sha256(domain.encode()).hexdigest()[:12]}"
+    effective_provider = _effective_provider()
+
+    # Step 1: Apollo search for similar companies
+    target_results: list[dict[str, Any]] = []
+    _trace.write(
+        run_id=run_id, event_type="run_start", agent="campaign",
+        payload={"domain": domain, "lead_email": f"campaign@{domain}", "campaign": campaign.name},
+    )
+
+    try:
+        apollo = get_apollo_client()
+        batch_limit = min(limit, _OUTBOUND_BATCH_CAP, 5)
+        tags = keyword_tags or ([company.lower().split()[0]] if company else [])
+
+        _trace.write(run_id=run_id, event_type="tool_call", agent="campaign",
+            payload={"tool": "apollo_search", "keyword_tags": tags, "limit": batch_limit})
+
+        search_result = apollo.search_organizations(
+            keyword_tags=tags or None,
+            employee_ranges=employee_ranges or None,
+            per_page=batch_limit,
+        )
+
+        _trace.write(run_id=run_id, event_type="tool_response", agent="campaign",
+            payload={"tool": "apollo_search", "found": len(search_result.organizations)})
+
+        # Step 2: For each target - enrich + score + draft
+        research_tool = ResearchCompanyTool(provider=effective_provider, model=_model)
+        fit_tool = FitScoreTool(provider=effective_provider, model=_model)
+        draft_tool = DraftOutboundTool(provider=effective_provider, model=_model)
+        campaign_dict = campaign.model_dump()
+
+        for org in search_result.organizations[:batch_limit]:
+            target_domain = org.primary_domain or ""
+            target_company = org.name or target_domain
+
+            # Research
+            _trace.write(run_id=run_id, event_type="tool_call", agent="campaign",
+                payload={"tool": "research_company", "domain": target_domain})
+            brief = research_tool.run({"domain": target_domain}, run_id=run_id)
+
+            # Score
+            _trace.write(run_id=run_id, event_type="tool_call", agent="campaign",
+                payload={"tool": "fit_score", "domain": target_domain})
+            fit = fit_tool.run({"brief": brief, "campaign": campaign_dict}, run_id=run_id)
+            tier = fit.get("tier", "cold")
+
+            # Draft (only for hot/warm)
+            drafts = []
+            if tier in ("hot", "warm"):
+                _trace.write(run_id=run_id, event_type="tool_call", agent="campaign",
+                    payload={"tool": "draft_outbound", "domain": target_domain})
+                draft_result = draft_tool.run({
+                    "brief": brief, "campaign": campaign_dict,
+                    "persona_role": campaign.target_persona or "Head of Product",
+                    "company": target_company,
+                }, run_id=run_id)
+                drafts = draft_result.get("drafts", [])
+
+            target_results.append({
+                "company": target_company,
+                "domain": target_domain,
+                "industry": brief.get("industry"),
+                "employees": org.estimated_num_employees,
+                "revenue": org.organization_revenue_printed,
+                "fit_tier": tier,
+                "fit_points": fit.get("points", 0),
+                "fit_reasons": fit.get("reason_codes", []),
+                "drafts": drafts,
+            })
+
+    except Exception as exc:
+        logger.warning("Campaign execution failed: %s", exc)
+
+    # Finalize
+    tier_counts: dict[str, int] = {}
+    for t in target_results:
+        tier_counts[t["fit_tier"]] = tier_counts.get(t["fit_tier"], 0) + 1
+
+    total_drafts = sum(len(t.get("drafts", [])) for t in target_results)
+
+    _trace.write(
+        run_id=run_id, event_type="run_end", agent="campaign",
+        payload={
+            "domain": domain, "lead_email": f"campaign@{domain}",
+            "final_tier": "campaign", "final_route": "campaign",
+            "trace_path": "OUTBOUND_CAMPAIGN",
+            "steps_taken": len(target_results),
+            "total_drafts": total_drafts,
+            "tier_summary": tier_counts,
+        },
+    )
+
+    campaign_result: dict[str, Any] = {
+        "run_id": run_id,
+        "domain": domain,
+        "motion": "outbound",
+        "run_type": "outbound_campaign",
+        "campaign_name": campaign.name,
+        "source_company": company or domain,
+        "targets": target_results,
+        "targets_processed": len(target_results),
+        "total_drafts": total_drafts,
+        "tier_summary": tier_counts,
+        "status": "launched",
+    }
+
+    # Store in idempotency (domain-keyed, overwrite on re-launch)
+    idem_key = hashlib.sha256(f"campaign-domain|{domain}".encode()).hexdigest()
+    _trace.store_idempotency_key(idem_key, run_id, campaign_result)
+
+    return campaign_result
+
+
+@app.post("/outbound/campaign-for-company")
+async def campaign_for_company(req: CompanyCampaignRequest) -> dict[str, Any]:
+    """Launch/update a campaign for a company DOMAIN (account-level)."""
+    campaign = Campaign(**req.campaign.model_dump())
+    return _run_domain_campaign(
+        domain=req.domain, company=req.company,
+        campaign=campaign,
+        keyword_tags=req.apollo_keyword_tags,
+        employee_ranges=req.apollo_employee_ranges,
+        limit=req.apollo_limit,
+    )
+
+
+@app.get("/outbound/campaign/{domain}")
+def get_domain_campaign(domain: str) -> dict[str, Any]:
+    """Get the existing campaign for a domain, if any."""
+    idem_key = hashlib.sha256(f"campaign-domain|{domain}".encode()).hexdigest()
+    stored = _trace.get_by_idempotency_key(idem_key)
+    if stored is None:
+        return {"domain": domain, "campaign": None}
+    return {"domain": domain, "campaign": stored["result"]}
+
+
+@app.post("/outbound/campaign-from-lead")
+async def campaign_from_lead(req: CampaignFromLeadRequest) -> dict[str, Any]:
+    """Legacy alias: launch campaign from a lead's email (derives domain)."""
+    domain = req.email.rsplit("@", 1)[1] if "@" in req.email else ""
+    if not domain:
+        raise HTTPException(status_code=422, detail="Cannot derive domain from email")
+    crm_record = _crm.lookup(req.email)
+    company = (crm_record or {}).get("company", "") or domain
+    campaign = Campaign(**req.campaign.model_dump())
+    return _run_domain_campaign(
+        domain=domain, company=company,
+        campaign=campaign,
+        keyword_tags=req.apollo_keyword_tags,
+        employee_ranges=req.apollo_employee_ranges,
+        limit=req.apollo_limit,
+    )

@@ -1,0 +1,19 @@
+
+========================================================================
+  GTM Lead-Triage Eval — 5 mock leads, provider=mock (CI gate)
+========================================================================
+
+  Email                                         Expected                Got  Match
+  ----------------------------------- ------------------ ------------------ ------
+  j.martinez@acmefintech.com            hot/ae_immediate   hot/ae_immediate     OK
+  mark.chen@cloudtechgroup.com          warm/sdr_nurture   warm/sdr_nurture     OK
+  alex.kumar@smallstartup.io          cold/marketing_nurture cold/marketing_nurture     OK
+  randomuser123@gmail.com              disqualified/drop  disqualified/drop     OK
+  sarah.jones@gmail.com                 warm/sdr_nurture   warm/sdr_nurture     OK
+
+  ========================================================================
+  Score: 5/5
+  ========================================================================
+
+  All leads triaged correctly.
+

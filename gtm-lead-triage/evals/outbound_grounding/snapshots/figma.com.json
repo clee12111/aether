@@ -1,0 +1,23 @@
+{
+  "domain": "figma.com",
+  "what_they_do": "Figma is a public American software company founded in 2012, specializing in a cloud-based collaborative design platform. Headquartered in San Francisco, Figma enables real-time creation, prototyping, and iteration of user interfaces directly in web browsers. The platform supports vector graphics, multiplayer collaboration, and developer handoff, making it a comprehensive tool for designers and developers alike.\n\nFigma's journey began with the founders' vision to simplify creative tools for web use. It launched its public version in 2016 and quickly gained popularity due to its innovative features and freemium model. The company has made significant strides in the design space, including the introduction of Figma Community for sharing files and the acquisition of AI startup Weavy to enhance its offerings with advanced editing capabilities. With approximately 2,425 employees, Figma continues to lead in the digital product design market, serving a diverse range of global teams and organizations.",
+  "industry": "design",
+  "size": "enterprise",
+  "recent_signals": [],
+  "likely_problems": [],
+  "inferred_role": "Head of Product",
+  "confidence": 0.2,
+  "tech_stack": [
+    "AI",
+    "AWS Analytics",
+    "AWS Cloud",
+    "AWS Public Cloud",
+    "AWS Schema Conversion Tool",
+    "AWS Trusted Advisor",
+    "Amazon AWS",
+    "Amazon Route 53",
+    "Anthropic Claude",
+    "Apple Business Manager"
+  ],
+  "is_requester": false
+}

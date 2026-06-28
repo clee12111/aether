@@ -16,6 +16,8 @@ class SQLiteCRM(CRMStore):
     """
 
     def __init__(self, db_path: str = ":memory:") -> None:
+        import threading
+        self._lock = threading.Lock()
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute(
@@ -49,12 +51,13 @@ class SQLiteCRM(CRMStore):
 
     def upsert(self, email: str, data: dict[str, Any]) -> None:
         blob = json.dumps(data, default=str)
-        self._conn.execute(
-            "INSERT INTO crm_records (email, data) VALUES (?, ?) "
-            "ON CONFLICT(email) DO UPDATE SET data = excluded.data",
-            (email, blob),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO crm_records (email, data) VALUES (?, ?) "
+                "ON CONFLICT(email) DO UPDATE SET data = excluded.data",
+                (email, blob),
+            )
+            self._conn.commit()
 
     def add_activity(self, email: str, activity: dict[str, Any]) -> dict[str, Any] | None:
         # Dedup on (run_id + action) — if this exact delivery already exists, return it

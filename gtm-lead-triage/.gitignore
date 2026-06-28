@@ -4,3 +4,9 @@ __pycache__/
 .env
 .env.*
 .env.local
+data/_scratch/
+.coverage
+.next/
+node_modules/
+test-results/
+web/.shots/

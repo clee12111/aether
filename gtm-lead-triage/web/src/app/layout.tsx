@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aether GTM — Lead Triage",
-  description: "AI-powered lead triage agent",
+  title: "Aether GTM",
+  description: "AI-powered lead triage and outbound platform",
 };
 
 export default function RootLayout({

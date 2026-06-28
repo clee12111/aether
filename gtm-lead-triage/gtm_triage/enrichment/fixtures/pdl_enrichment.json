@@ -1,0 +1,16 @@
+{
+  "user@notion.so": {
+    "industry": "technology",
+    "company_size": "enterprise",
+    "seniority": "manager",
+    "role": "Product Manager",
+    "company": "Notion Labs Inc"
+  },
+  "user@datadoghq.com": {
+    "industry": "technology",
+    "company_size": "enterprise",
+    "seniority": "director",
+    "role": "Director of Engineering",
+    "company": "Datadog Inc"
+  }
+}
