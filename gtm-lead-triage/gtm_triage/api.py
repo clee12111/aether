@@ -37,7 +37,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -479,62 +479,77 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("CRM upsert failed for run %s: %s", result.run_id[:8], exc)
 
-    # Enrich-once: attach company-research brief to the stored result
-    # so downstream outbound can reuse it without re-enriching
-    brief: dict[str, Any] | None = None
+    # Store result immediately (return fast)
     domain = lead.email.rsplit("@", 1)[1] if "@" in lead.email else ""
-    if domain:
-        try:
-            from gtm_triage.tools.research_company import ResearchCompanyTool
-            research_tool = ResearchCompanyTool(provider="mock")
-            brief = research_tool.run({"domain": domain, "role": "", "email": lead.email})
-        except Exception as exc:
-            logger.debug("Company research for %s failed: %s", domain, exc)
-
-    # Productboard write-back: log the lead's request by domain
-    pb_note: dict[str, Any] | None = None
-    try:
-        from gtm_triage.productboard.writeback import write_lead_to_productboard
-        pb_note = write_lead_to_productboard(
-            email=lead.email, message=lead.message,
-            company=lead.company, name=lead.name,
-            run_id=result.run_id, trace=_trace,
-        )
-    except Exception as exc:
-        logger.debug("PB write-back failed: %s", exc)
-
-    # Store idempotency key -> result (with provider tag + brief + PB note)
     result_dict = result.model_dump()
     result_dict["provider_used"] = effective_provider
     result_dict["motion"] = "inbound"
-    if brief:
-        result_dict["company_brief"] = brief
-    if pb_note:
-        result_dict["pb_note"] = pb_note
     _trace.store_idempotency_key(idem_key, result.run_id, result_dict)
 
-    # Auto-draft for warm/hot leads (non-blocking, best-effort)
-    if result.final_tier in ("hot", "warm"):
-        try:
-            _auto_draft_campaign = Campaign(
-                name="Auto ICP", value_prop="help your team work more effectively",
-                icp_keywords=["saas", "product management"], target_persona="Head of Product",
-            )
-            _auto_target = OutboundTarget(
-                company=lead.company, domain=domain,
-                persona_role="Head of Product", campaign=_auto_draft_campaign,
-                email=lead.email, name=lead.name,
-            )
-            _auto_result = _run_single_outbound(_auto_target, effective_provider)
-            _auto_result["run_type"] = "outbound_email"
-            _auto_result["motion"] = "outbound"
-            _auto_result["source_run_id"] = result.run_id
-            _auto_idem = hashlib.sha256(f"from-lead|{lead.email}|Auto ICP".encode()).hexdigest()
-            _trace.store_idempotency_key(_auto_idem, _auto_result.get("run_id", ""), _auto_result)
-        except Exception as exc:
-            logger.debug("Auto-draft failed for %s: %s", result.run_id[:8], exc)
+    # ── Background tasks (off the critical path) ──────────────────────
+    # These run AFTER the response is sent to the client.
+    bg = BackgroundTasks()
 
-    return result_dict
+    def _bg_enrich_and_draft():
+        """Background: company research + PB write-back + auto-draft."""
+        try:
+            # Company research brief
+            brief: dict[str, Any] | None = None
+            if domain:
+                try:
+                    from gtm_triage.tools.research_company import ResearchCompanyTool
+                    brief = ResearchCompanyTool(provider="mock").run(
+                        {"domain": domain, "role": "", "email": lead.email}
+                    )
+                except Exception:
+                    pass
+
+            # PB write-back
+            pb_note = None
+            try:
+                from gtm_triage.productboard.writeback import write_lead_to_productboard
+                pb_note = write_lead_to_productboard(
+                    email=lead.email, message=lead.message,
+                    company=lead.company, name=lead.name,
+                    run_id=result.run_id, trace=_trace,
+                )
+            except Exception:
+                pass
+
+            # Update stored result with brief + pb_note
+            enriched = dict(result_dict)
+            if brief:
+                enriched["company_brief"] = brief
+            if pb_note:
+                enriched["pb_note"] = pb_note
+            _trace.store_idempotency_key(idem_key, result.run_id, enriched)
+
+            # Auto-draft for warm/hot leads
+            if result.final_tier in ("hot", "warm") and domain:
+                try:
+                    auto_campaign = Campaign(
+                        name="Auto ICP", value_prop="help your team work more effectively",
+                        icp_keywords=["saas", "product management"], target_persona="Head of Product",
+                    )
+                    auto_target = OutboundTarget(
+                        company=lead.company, domain=domain,
+                        persona_role="Head of Product", campaign=auto_campaign,
+                        email=lead.email, name=lead.name,
+                    )
+                    auto_result = _run_single_outbound(auto_target, effective_provider)
+                    auto_result["run_type"] = "outbound_email"
+                    auto_result["motion"] = "outbound"
+                    auto_result["source_run_id"] = result.run_id
+                    auto_idem = hashlib.sha256(f"from-lead|{lead.email}|Auto ICP".encode()).hexdigest()
+                    _trace.store_idempotency_key(auto_idem, auto_result.get("run_id", ""), auto_result)
+                except Exception as exc:
+                    logger.debug("Auto-draft bg failed: %s", exc)
+        except Exception as exc:
+            logger.debug("Background enrich failed: %s", exc)
+
+    bg.add_task(_bg_enrich_and_draft)
+
+    return JSONResponse(content=result_dict, background=bg)
 
 
 # Manual Productboard send
@@ -1172,15 +1187,22 @@ class CampaignFromLeadRequest(BaseModel):
     apollo_limit: int = Field(default=3, ge=1)
 
 
+_MAX_CAMPAIGN_TARGETS = int(os.environ.get("MAX_CAMPAIGN_TARGETS", "5"))
+
+
 def _run_domain_campaign(
     domain: str, company: str, campaign: Campaign,
     keyword_tags: list[str], employee_ranges: list[str], limit: int,
 ) -> dict[str, Any]:
     """Core campaign logic: Apollo search -> enrich + score + draft per target.
 
-    This does REAL work: finds similar companies, researches each, scores ICP
-    fit, and drafts tailored outreach. Respects daily cap.
+    Guardrails:
+    - Apollo search fires ONCE (no duplicates)
+    - Max targets capped at MAX_CAMPAIGN_TARGETS (default 5)
+    - Dedupe by domain (skip seed domain + repeats)
+    - Non-advancing stop: 2 consecutive empty briefs = stop expanding
     """
+    import time as _time
     from gtm_triage.apollo import get_apollo_client
     from gtm_triage.tools.research_company import ResearchCompanyTool
     from gtm_triage.tools.fit_score import FitScoreTool
@@ -1188,8 +1210,8 @@ def _run_domain_campaign(
 
     run_id = f"campaign-{hashlib.sha256(domain.encode()).hexdigest()[:12]}"
     effective_provider = _effective_provider()
+    t_start = _time.monotonic()
 
-    # Step 1: Apollo search for similar companies
     target_results: list[dict[str, Any]] = []
     _trace.write(
         run_id=run_id, event_type="run_start", agent="campaign",
@@ -1197,8 +1219,9 @@ def _run_domain_campaign(
     )
 
     try:
+        # Step 1: Apollo search — EXACTLY ONCE
         apollo = get_apollo_client()
-        batch_limit = min(limit, _OUTBOUND_BATCH_CAP, 5)
+        batch_limit = min(limit, _MAX_CAMPAIGN_TARGETS)
         tags = keyword_tags or ([company.lower().split()[0]] if company else [])
 
         _trace.write(run_id=run_id, event_type="tool_call", agent="campaign",
@@ -1213,20 +1236,38 @@ def _run_domain_campaign(
         _trace.write(run_id=run_id, event_type="tool_response", agent="campaign",
             payload={"tool": "apollo_search", "found": len(search_result.organizations)})
 
-        # Step 2: For each target - enrich + score + draft
+        # Step 2: Per target — with dedup + non-advancing stop
         research_tool = ResearchCompanyTool(provider=effective_provider, model=_model)
         fit_tool = FitScoreTool(provider=effective_provider, model=_model)
         draft_tool = DraftOutboundTool(provider=effective_provider, model=_model)
         campaign_dict = campaign.model_dump()
 
+        processed_domains: set[str] = {domain}  # skip the seed company itself
+        non_advancing = 0
+
         for org in search_result.organizations[:batch_limit]:
             target_domain = org.primary_domain or ""
             target_company = org.name or target_domain
+
+            # Dedupe by domain
+            if target_domain in processed_domains:
+                continue
+            processed_domains.add(target_domain)
 
             # Research
             _trace.write(run_id=run_id, event_type="tool_call", agent="campaign",
                 payload={"tool": "research_company", "domain": target_domain})
             brief = research_tool.run({"domain": target_domain}, run_id=run_id)
+
+            # Non-advancing check: empty brief = no useful data
+            if not brief.get("industry") and not brief.get("what_they_do"):
+                non_advancing += 1
+                if non_advancing >= 2:
+                    _trace.write(run_id=run_id, event_type="tool_response", agent="campaign",
+                        payload={"tool": "non_advancing_stop", "consecutive_empty": non_advancing})
+                    break
+            else:
+                non_advancing = 0
 
             # Score
             _trace.write(run_id=run_id, event_type="tool_call", agent="campaign",
@@ -1262,6 +1303,7 @@ def _run_domain_campaign(
         logger.warning("Campaign execution failed: %s", exc)
 
     # Finalize
+    wall_ms = int((_time.monotonic() - t_start) * 1000)
     tier_counts: dict[str, int] = {}
     for t in target_results:
         tier_counts[t["fit_tier"]] = tier_counts.get(t["fit_tier"], 0) + 1
@@ -1277,6 +1319,7 @@ def _run_domain_campaign(
             "steps_taken": len(target_results),
             "total_drafts": total_drafts,
             "tier_summary": tier_counts,
+            "wall_ms": wall_ms,
         },
     )
 
@@ -1290,6 +1333,7 @@ def _run_domain_campaign(
         "targets": target_results,
         "targets_processed": len(target_results),
         "total_drafts": total_drafts,
+        "wall_ms": wall_ms,
         "tier_summary": tier_counts,
         "status": "launched",
     }

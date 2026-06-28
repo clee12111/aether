@@ -58,7 +58,7 @@ class WebsiteFallback:
 
     def _get_client(self) -> httpx.Client:
         if self._client is None:
-            self._client = httpx.Client(timeout=10.0, follow_redirects=True)
+            self._client = httpx.Client(timeout=5.0, follow_redirects=True)
         return self._client
 
     def fetch_and_extract(self, domain: str) -> EnrichmentResult:
@@ -92,7 +92,7 @@ class WebsiteFallback:
 
         try:
             client = self._get_client()
-            resp = client.get(f"https://{domain}", timeout=8.0)
+            resp = client.get(f"https://{domain}", timeout=5.0)
             if resp.status_code == 200:
                 return resp.text[:15000]  # limit to avoid huge pages
         except Exception as exc:
