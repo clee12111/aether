@@ -106,16 +106,18 @@ def _classify_signal(title: str, description: str) -> str:
 
 # ── Researcher ──────────────────────────────────────────────────────────────
 
+_domain_cache: dict[str, "CompanyResearch"] = {}
+
+
+def clear_domain_cache() -> None:
+    """Clear the domain enrichment cache (for tests)."""
+    _domain_cache.clear()
+
+
 class CompanyResearcher:
     """Turns a domain into a cited company brief.
 
-    Args:
-        pdl_provider: EnrichmentProvider for firmographics (PDL or fixture).
-        search_provider: SearchProvider for recent signals.
-        website_fetcher: Callable(domain) -> str|None returning website text.
-            If None, uses a default stub that returns None (no website fetch).
-        llm_provider: LLM provider name for the summary call ("mock" for tests).
-        llm_model: LLM model name.
+    Caches results by domain so contacts of the same account don't re-enrich.
     """
 
     def __init__(
@@ -141,6 +143,10 @@ class CompanyResearcher:
         role: str | None = None,
     ) -> CompanyResearch:
         """Build a cited company brief for the given domain."""
+        # Domain cache: same domain = same brief (contacts share enrichment)
+        if domain in _domain_cache:
+            return _domain_cache[domain]
+
         off = os.environ.get("COMPANY_RESEARCH", "").lower() == "off"
 
         sources: list[SourcedClaim] = []
@@ -324,7 +330,7 @@ class CompanyResearcher:
 
         confidence = min(1.0, resolved_count * 0.20)
 
-        return CompanyResearch(
+        result = CompanyResearch(
             domain=domain,
             what_they_do=what_they_do,
             industry=industry,
@@ -337,6 +343,9 @@ class CompanyResearcher:
             tech_stack=tech_stack,
             is_requester=is_requester,
         )
+        # Cache by domain so same-account contacts don't re-enrich
+        _domain_cache[domain] = result
+        return result
 
     def _llm_summarize(
         self,

@@ -116,6 +116,7 @@ function TraceCol({ title, run }: { title: string; run: JourneyRun | undefined }
 export default function TestingPage() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [journey, setJourney] = useState<JourneyData | null>(null);
@@ -124,7 +125,12 @@ export default function TestingPage() {
   const [sortMode, setSortMode] = useState<SortMode>("tier");
 
   const fetchRuns = useCallback(async () => {
-    try { setRuns(await apiGet<RunSummary[]>("/runs?limit=50")); } catch { /* */ }
+    try {
+      setFetchError("");
+      setRuns(await apiGet<RunSummary[]>("/runs?limit=50"));
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : "Failed to load runs");
+    }
     finally { setLoading(false); }
   }, []);
 
@@ -151,7 +157,9 @@ export default function TestingPage() {
   const companies: CompanyGroup[] = (() => {
     const byDomain: Record<string, { emails: Set<string>; tiers: string[]; count: number }> = {};
     for (const run of runs) {
+      if (!run.lead_email) continue;  // skip runs with no email (campaign synthetic)
       const domain = run.lead_email.includes("@") ? run.lead_email.split("@")[1] : run.lead_email;
+      if (domain.startsWith("campaign")) continue;  // skip campaign@ synthetic entries
       if (!byDomain[domain]) byDomain[domain] = { emails: new Set(), tiers: [], count: 0 };
       byDomain[domain].emails.add(run.lead_email);
       byDomain[domain].tiers.push(run.final_tier);
@@ -205,7 +213,8 @@ export default function TestingPage() {
           </div>
           <div className="flex-1 overflow-y-auto">
             {loading && <div className="p-3 space-y-1">{[1, 2, 3].map(i => <div key={i} className="skeleton h-8 rounded-lg" />)}</div>}
-            {!loading && companies.length === 0 && <p className="p-3 text-xs text-stone-400">No runs yet.</p>}
+            {fetchError && <p className="p-3 text-xs text-red-500">{fetchError}</p>}
+            {!loading && !fetchError && companies.length === 0 && <p className="p-3 text-xs text-stone-400">No runs yet. Submit leads in Inbound.</p>}
             {companies.map(co => (
               <button key={co.domain} onClick={() => { setSelectedDomain(co.domain); setSelectedEmail(null); setJourney(null); }}
                 className={`w-full text-left px-3 py-2 border-b border-stone-100 transition-colors ${selectedDomain === co.domain ? "bg-indigo-50/50 border-l-2 border-l-indigo-500" : "hover:bg-stone-50"}`}>

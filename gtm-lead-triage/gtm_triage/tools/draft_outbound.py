@@ -164,6 +164,12 @@ def _verify_draft(
     fact_ids = {f["fact_id"] for f in facts}
     all_fact_text = " ".join(f["text"] for f in facts).lower()
 
+    # Strip any fact_id markers the LLM leaked into the body
+    body = draft.get("body", "")
+    body = re.sub(r"\s*\(fact_id:\s*\[?\w+\]?\)", "", body)  # (fact_id: [wtd])
+    body = re.sub(r"\s*\[(?:wtd|signal_\d+|problem_\d+|tech|industry|size|demand)\]", "", body)  # bare [wtd]
+    draft = {**draft, "body": body}
+
     # Validate claimed fact_ids
     claims = draft.get("claims", [])
     verified_ids: list[str] = []
@@ -283,7 +289,7 @@ You will receive:
 2. CAMPAIGN — the value proposition and target persona.
 
 Write TWO email variants (A and B) with DIFFERENT angles:
-- Each opens with a specific, natural observation about THIS company drawn from ONE grounded fact (cite its fact_id).
+- Each opens with a specific, natural observation about THIS company drawn from ONE grounded fact. Reference the fact_id ONLY in the claims array, NEVER in the email body text. The body must read as a clean email with no fact_ids, no brackets, no parenthetical citations.
 - The PROBLEM BRIDGE must be GENERALIZED and HEDGED — "teams scaling in this space often find…", "companies at this stage tend to…". NEVER assert an unstated specific about the target ("you're growing", "your team struggles with X", "your feedback is scattered"). Use third-person generalizations, not second-person assertions of unstated facts.
 - If a "Likely challenge" fact is provided, draw the problem bridge from it.
 - Connect to the campaign value prop as the solution.

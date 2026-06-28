@@ -261,7 +261,7 @@ export default function OutboundPage() {
           )}
 
           {selAccount && (
-            <div className="space-y-4 max-w-3xl">
+            <div className="space-y-4">
               {/* Account header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

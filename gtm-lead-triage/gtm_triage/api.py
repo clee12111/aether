@@ -514,6 +514,27 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         result_dict["pb_note"] = pb_note
     _trace.store_idempotency_key(idem_key, result.run_id, result_dict)
 
+    # Auto-draft for warm/hot leads (non-blocking, best-effort)
+    if result.final_tier in ("hot", "warm"):
+        try:
+            _auto_draft_campaign = Campaign(
+                name="Auto ICP", value_prop="help your team work more effectively",
+                icp_keywords=["saas", "product management"], target_persona="Head of Product",
+            )
+            _auto_target = OutboundTarget(
+                company=lead.company, domain=domain,
+                persona_role="Head of Product", campaign=_auto_draft_campaign,
+                email=lead.email, name=lead.name,
+            )
+            _auto_result = _run_single_outbound(_auto_target, effective_provider)
+            _auto_result["run_type"] = "outbound_email"
+            _auto_result["motion"] = "outbound"
+            _auto_result["source_run_id"] = result.run_id
+            _auto_idem = hashlib.sha256(f"from-lead|{lead.email}|Auto ICP".encode()).hexdigest()
+            _trace.store_idempotency_key(_auto_idem, _auto_result.get("run_id", ""), _auto_result)
+        except Exception as exc:
+            logger.debug("Auto-draft failed for %s: %s", result.run_id[:8], exc)
+
     return result_dict
 
 

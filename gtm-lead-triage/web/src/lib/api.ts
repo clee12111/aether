@@ -39,7 +39,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetchWithTimeout(`${API}${path}`, { headers: defaultHeaders }, 15_000);
+  const res = await fetchWithTimeout(`${API}${path}`, { headers: defaultHeaders, cache: "no-store" as RequestCache }, 15_000);
   if (!res.ok) throw new Error(friendlyError(res.status, `${res.status} ${res.statusText}`));
   return res.json();
 }

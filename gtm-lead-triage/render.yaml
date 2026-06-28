@@ -62,3 +62,6 @@ services:
       - key: LANGFUSE_BASE_URL
         sync: false
     healthCheckPath: /ready
+    # Keep-warm: use a free cron service (e.g. cron-job.org or UptimeRobot)
+    # to ping GET https://<your-render-url>/health every 10 minutes.
+    # This prevents Render free-tier cold starts (30-60s spin-up delay).

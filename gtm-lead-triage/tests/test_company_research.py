@@ -17,7 +17,14 @@ from gtm_triage.enrichment.company_research import (
     CompanyResearcher,
     RecentSignal,
     SourcedClaim,
+    clear_domain_cache,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """Clear the domain enrichment cache before each test."""
+    clear_domain_cache()
 from gtm_triage.enrichment.fixture_provider import FixtureProvider
 from gtm_triage.enrichment.search import (
     FixtureSearchProvider,
