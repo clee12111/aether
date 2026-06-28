@@ -148,7 +148,7 @@ class PDLProvider(EnrichmentProvider):
         cache_path: str | Path | None = None,
         client: httpx.Client | None = None,
     ) -> None:
-        self._api_key = api_key or os.environ.get("PDL_API_KEY", "")
+        self._api_key = (api_key or os.environ.get("PDL_API_KEY", "")).strip()
         self._client = client
         self._owns_client = client is None
 

@@ -164,7 +164,7 @@ async def _lifespan(app: FastAPI):
     else:
         _crm = SQLiteCRM(crm_path)
 
-    database_url = os.environ.get("DATABASE_URL", "")
+    database_url = os.environ.get("DATABASE_URL", "").strip()
     if database_url:
         from gtm_triage.trace.pg_store import PostgresTraceStore
         _trace = PostgresTraceStore(database_url)

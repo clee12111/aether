@@ -58,7 +58,7 @@ class OpenAIProvider(LLMProvider):
     """OpenAI API via the official SDK."""
 
     def __init__(self, api_key: str | None = None) -> None:
-        self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self._api_key = (api_key or os.environ.get("OPENAI_API_KEY", "")).strip()
 
     @property
     def name(self) -> str:
@@ -100,7 +100,7 @@ class AnthropicProvider(LLMProvider):
     """
 
     def __init__(self, api_key: str | None = None) -> None:
-        self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        self._api_key = (api_key or os.environ.get("ANTHROPIC_API_KEY", "")).strip()
 
     @property
     def name(self) -> str:

@@ -32,9 +32,9 @@ def _init() -> None:
         return
     _initialized = True
 
-    public_key = os.environ.get("LANGFUSE_PUBLIC_KEY", "")
-    secret_key = os.environ.get("LANGFUSE_SECRET_KEY", "")
-    host = os.environ.get("LANGFUSE_HOST", "") or os.environ.get("LANGFUSE_BASE_URL", "")
+    public_key = os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
+    secret_key = os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
+    host = (os.environ.get("LANGFUSE_HOST", "") or os.environ.get("LANGFUSE_BASE_URL", "")).strip()
 
     if not (public_key and secret_key):
         _enabled = False

@@ -86,7 +86,7 @@ def init_sentry() -> None:
 
     No-op (silent) if either condition is false.
     """
-    dsn = os.environ.get("SENTRY_DSN", "")
+    dsn = os.environ.get("SENTRY_DSN", "").strip()
     if not dsn:
         return
 
