@@ -39,21 +39,15 @@ const ROUTE_LABELS: Record<string, { heading: string; detail: string }> = {
   },
 };
 
-function uniqueEmail(base: string): string {
-  const ts = Date.now().toString(36);
-  const [local, domain] = base.split("@");
-  return `${local}+${ts}@${domain}`;
-}
-
 const PRESETS = [
   {
     label: "Hot buyer",
     tier: "hot" as const,
     base: {
       name: "Julia Martinez, VP of Sales",
-      email: "julia.martinez@acmefintech.com",
-      company: "Acme Fintech International",
-      message: "We need to schedule a demo for our sales team this week. Urgent priority.",
+      email: "julia.martinez@stripe.com",
+      company: "Stripe",
+      message: "We have budget approved and need to schedule a demo for our sales team this week. Urgent priority.",
     },
   },
   {
@@ -61,8 +55,8 @@ const PRESETS = [
     tier: "warm" as const,
     base: {
       name: "Mark Chen, Product Manager",
-      email: "mark.chen@cloudtechgroup.com",
-      company: "CloudTech Group",
+      email: "mark.chen@datadog.com",
+      company: "Datadog",
       message: "Exploring tools for our Q3 roadmap. Can you send pricing info?",
     },
   },
@@ -71,8 +65,8 @@ const PRESETS = [
     tier: "cold" as const,
     base: {
       name: "Alex Kumar",
-      email: "alex.kumar@smallstartup.io",
-      company: "Small Startup",
+      email: "alex.kumar@notion.so",
+      company: "Notion",
       message: "Just browsing. Saw your site.",
     },
   },
@@ -91,8 +85,8 @@ const PRESETS = [
     tier: "disqualified" as const,
     base: {
       name: "Maria Garcia",
-      email: "maria.g@example-corp.com",
-      company: "Example Corp",
+      email: "maria.garcia@hubspot.com",
+      company: "HubSpot",
       message: "Please remove me from your mailing list. Unsubscribe.",
     },
   },
@@ -174,7 +168,7 @@ export default function LeadForm() {
                     <button
                       key={p.label}
                       type="button"
-                      onClick={() => setForm({ ...p.base, email: uniqueEmail(p.base.email) })}
+                      onClick={() => setForm({ ...p.base })}
                       className={`text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${PRESET_TIER_COLOR[p.tier]}`}
                     >
                       {p.label}
