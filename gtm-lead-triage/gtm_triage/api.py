@@ -194,6 +194,27 @@ async def _lifespan(app: FastAPI):
     ])
     _executor = Executor(registry, _trace)
 
+    # ── Startup secret diagnostics (masked — never log values) ──────────
+    _secrets = {
+        "OPENAI_API_KEY": bool(os.environ.get("OPENAI_API_KEY", "")),
+        "HUBSPOT_TOKEN": bool(os.environ.get("HUBSPOT_TOKEN", "")),
+        "PDL_API_KEY": bool(os.environ.get("PDL_API_KEY", "")),
+        "DATABASE_URL": bool(os.environ.get("DATABASE_URL", "")),
+        "LANGFUSE_SECRET_KEY": bool(os.environ.get("LANGFUSE_SECRET_KEY", "")),
+    }
+    present = [k for k, v in _secrets.items() if v]
+    absent = [k for k, v in _secrets.items() if not v]
+    logger.info(
+        "startup_secrets",
+        extra={
+            "present": present,
+            "absent": absent,
+            "enrichment_provider": enrichment_backend,
+            "crm_backend": crm_backend,
+            "gtm_provider": _provider,
+        },
+    )
+
     yield
 
     _crm.close()
@@ -255,11 +276,17 @@ def get_config() -> dict[str, Any]:
         "provider": _provider,
         "model": _model,
         "crm_backend": os.environ.get("CRM_BACKEND", "sqlite"),
+        "enrichment_provider": os.environ.get("ENRICHMENT_PROVIDER", "mock"),
         "langfuse_enabled": bool(os.environ.get("LANGFUSE_PUBLIC_KEY", "")),
         "langfuse_host": os.environ.get("LANGFUSE_BASE_URL", "") or os.environ.get("LANGFUSE_HOST", ""),
         "daily_cap": _daily_cap,
         "used_today": used,
         "remaining": max(0, _daily_cap - used) if can_use_openai else 0,
+        # Masked secret presence (boolean only, never values)
+        "openai_key_set": bool(os.environ.get("OPENAI_API_KEY", "")),
+        "hubspot_token_set": bool(os.environ.get("HUBSPOT_TOKEN", "")),
+        "pdl_key_set": bool(os.environ.get("PDL_API_KEY", "")),
+        "database_url_set": bool(os.environ.get("DATABASE_URL", "")),
     }
 
 
