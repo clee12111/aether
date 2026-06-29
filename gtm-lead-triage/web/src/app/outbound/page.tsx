@@ -40,60 +40,43 @@ export default function OutboundPage() {
 
   const defaultCampaign = { name: "Productboard ICP", value_prop: "centralize scattered customer feedback and tie it to roadmap decisions", icp_keywords: ["product management", "saas", "customer feedback"], target_persona: "Head of Product" };
 
-  // Load outbound results for a set of leads (drafts + campaigns)
-  const loadOutboundData = useCallback(async (leadsList: Lead[]) => {
-    const existing: Record<string, OutboundResult> = {};
-    const existingCampaigns: Record<string, Record<string, unknown>> = {};
-    const statuses: Record<string, DraftStatus> = {};
-
-    for (const lead of leadsList) {
-      try {
-        const data = await apiGet<{ results: Array<Record<string, unknown>> }>(`/outbound/by-lead/${encodeURIComponent(lead.email)}`);
-        for (const r of data.results) {
-          if (r.run_type !== "outbound_campaign" && r.run_id) {
-            existing[lead.email] = r as unknown as OutboundResult;
-            statuses[lead.email] = "ready";
-          }
+  // Load outbound data LAZILY per contact (not all leads on mount)
+  async function loadContactDraft(email: string) {
+    if (results[email] || draftStatus[email] === "loading") return;
+    setDraftStatus(prev => ({ ...prev, [email]: "loading" }));
+    try {
+      const data = await apiGet<{ results: Array<Record<string, unknown>> }>(`/outbound/by-lead/${encodeURIComponent(email)}`);
+      for (const r of data.results) {
+        if (r.run_type !== "outbound_campaign" && r.run_id) {
+          setResults(prev => ({ ...prev, [email]: r as unknown as OutboundResult }));
+          setDraftStatus(prev => ({ ...prev, [email]: "ready" }));
+          return;
         }
-        if (!statuses[lead.email]) statuses[lead.email] = "none";
-      } catch { statuses[lead.email] = "none"; }
+      }
+      setDraftStatus(prev => ({ ...prev, [email]: "none" }));
+    } catch {
+      setDraftStatus(prev => ({ ...prev, [email]: "none" }));
     }
+  }
 
-    const domains = new Set(leadsList.map(l => l.email.includes("@") ? l.email.split("@")[1] : "").filter(Boolean));
-    for (const domain of domains) {
-      try {
-        const data = await apiGet<{ domain: string; campaign: Record<string, unknown> | null }>(`/outbound/campaign/${encodeURIComponent(domain)}`);
-        if (data.campaign) existingCampaigns[domain] = data.campaign;
-      } catch { /* */ }
-    }
+  // Load campaign for a domain (lazy, on account select)
+  async function loadDomainCampaign(domain: string) {
+    if (campaigns[domain] !== undefined) return;
+    try {
+      const data = await apiGet<{ domain: string; campaign: Record<string, unknown> | null }>(`/outbound/campaign/${encodeURIComponent(domain)}`);
+      if (data.campaign) setCampaigns(prev => ({ ...prev, [domain]: data.campaign! }));
+    } catch { /* */ }
+  }
 
-    setResults(existing);
-    setCampaigns(existingCampaigns);
-    setDraftStatus(statuses);
-  }, []);
-
-  // Subscribe to store updates + trigger background revalidation
+  // On mount: just load leads (instant from cache), no outbound data
   useEffect(() => {
-    // If we have cached leads, load their outbound data immediately
-    if (cachedLeads.length > 0) {
-      loadOutboundData(cachedLeads);
-    }
-
-    // Trigger background revalidation (fetches fresh if stale)
     ensureLeads().then((fresh) => {
       setLeads(fresh);
       setLoading(false);
-      // Only reload outbound data if leads changed
-      if (fresh.length !== cachedLeads.length) {
-        loadOutboundData(fresh);
-      }
     });
-
-    // Subscribe so background refreshes / new-lead invalidations update us
     const unsub = subscribeLeads((updated) => {
       setLeads(updated);
       setLoading(false);
-      loadOutboundData(updated);
     });
     return unsub;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,9 +112,24 @@ export default function OutboundPage() {
     } catch { setDraftStatus(prev => ({ ...prev, [email]: "none" })); }
   }
 
-  function selectContact(email: string) {
+  async function selectContact(email: string) {
     setSelectedContact(email);
-    if (draftStatus[email] === "none") draftCandidate(email);
+    // If we already have a result, just show it
+    if (results[email]) return;
+    // Try loading an existing draft from the server first
+    if (draftStatus[email] !== "loading") {
+      await loadContactDraft(email);
+    }
+    // If still no result after loading, generate a new draft
+    if (!results[email] && draftStatus[email] === "none") {
+      draftCandidate(email);
+    }
+  }
+
+  function selectAccount(domain: string) {
+    setSelectedDomain(domain);
+    setSelectedContact(null);
+    loadDomainCampaign(domain);
   }
 
   function openCampaignModal(account: Account) {
@@ -236,7 +234,7 @@ export default function OutboundPage() {
             {accounts.map(account => {
               const isActive = selectedDomain === account.domain;
               return (
-                <button key={account.domain} onClick={() => { setSelectedDomain(account.domain); setSelectedContact(null); }}
+                <button key={account.domain} onClick={() => selectAccount(account.domain)}
                   className={`w-full text-left px-3 py-2 border-b border-stone-100 transition-colors ${isActive ? "bg-indigo-50/50 border-l-2 border-l-indigo-500" : "hover:bg-stone-50"}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-stone-900 truncate pr-2">{account.company}</span>
