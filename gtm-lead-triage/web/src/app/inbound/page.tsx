@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Nav } from "@/components/nav";
 import { apiPost } from "@/lib/api";
+import { invalidateLeads } from "@/lib/leads-store";
 
 /* -- Types ---------------------------------------------------------------- */
 
@@ -114,6 +115,8 @@ export default function InboundPage() {
         resp = await apiPost<TriageResponse>("/webhooks/clay", { row: JSON.parse(clayJsonRef.current) });
       }
       setResult(resp);
+      // Invalidate shared leads cache so Outbound picks up the new lead
+      invalidateLeads();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reach the server.");
     } finally {

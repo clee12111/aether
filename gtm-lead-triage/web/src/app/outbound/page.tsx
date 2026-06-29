@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
-import { Lead, TIER_BADGE, TIER_DOT, CHANNEL_DOT, DraftVariant, factLabel } from "@/lib/tokens";
+import { TIER_BADGE, TIER_DOT, CHANNEL_DOT, DraftVariant, factLabel } from "@/lib/tokens";
+import { Lead, ensureLeads, subscribeLeads, invalidateLeads } from "@/lib/leads-store";
 
 /* -- Types ---------------------------------------------------------------- */
 
@@ -37,45 +38,56 @@ export default function OutboundPage() {
 
   const defaultCampaign = { name: "Productboard ICP", value_prop: "centralize scattered customer feedback and tie it to roadmap decisions", icp_keywords: ["product management", "saas", "customer feedback"], target_persona: "Head of Product" };
 
-  const fetchData = useCallback(async () => {
-    try {
-      const leadsList = await apiGet<Lead[]>("/leads");
-      setLeads(leadsList);
-      const existing: Record<string, OutboundResult> = {};
-      const existingCampaigns: Record<string, Record<string, unknown>> = {};
-      const statuses: Record<string, DraftStatus> = {};
+  // Load outbound results for a set of leads (drafts + campaigns)
+  const loadOutboundData = useCallback(async (leadsList: Lead[]) => {
+    const existing: Record<string, OutboundResult> = {};
+    const existingCampaigns: Record<string, Record<string, unknown>> = {};
+    const statuses: Record<string, DraftStatus> = {};
 
-      // Load per-lead outbound email drafts
-      for (const lead of leadsList) {
-        try {
-          const data = await apiGet<{ results: Array<Record<string, unknown>> }>(`/outbound/by-lead/${encodeURIComponent(lead.email)}`);
-          for (const r of data.results) {
-            if (r.run_type !== "outbound_campaign" && r.run_id) {
-              existing[lead.email] = r as unknown as OutboundResult;
-              statuses[lead.email] = "ready";
-            }
+    for (const lead of leadsList) {
+      try {
+        const data = await apiGet<{ results: Array<Record<string, unknown>> }>(`/outbound/by-lead/${encodeURIComponent(lead.email)}`);
+        for (const r of data.results) {
+          if (r.run_type !== "outbound_campaign" && r.run_id) {
+            existing[lead.email] = r as unknown as OutboundResult;
+            statuses[lead.email] = "ready";
           }
-          if (!statuses[lead.email]) statuses[lead.email] = "none";
-        } catch { statuses[lead.email] = "none"; }
-      }
+        }
+        if (!statuses[lead.email]) statuses[lead.email] = "none";
+      } catch { statuses[lead.email] = "none"; }
+    }
 
-      // Load domain-keyed campaigns
-      const domains = new Set(leadsList.map(l => l.email.includes("@") ? l.email.split("@")[1] : "").filter(Boolean));
-      for (const domain of domains) {
-        try {
-          const data = await apiGet<{ domain: string; campaign: Record<string, unknown> | null }>(`/outbound/campaign/${encodeURIComponent(domain)}`);
-          if (data.campaign) existingCampaigns[domain] = data.campaign;
-        } catch { /* */ }
-      }
+    const domains = new Set(leadsList.map(l => l.email.includes("@") ? l.email.split("@")[1] : "").filter(Boolean));
+    for (const domain of domains) {
+      try {
+        const data = await apiGet<{ domain: string; campaign: Record<string, unknown> | null }>(`/outbound/campaign/${encodeURIComponent(domain)}`);
+        if (data.campaign) existingCampaigns[domain] = data.campaign;
+      } catch { /* */ }
+    }
 
-      setResults(existing);
-      setCampaigns(existingCampaigns);
-      setDraftStatus(statuses);
-    } catch { /* */ }
-    finally { setLoading(false); }
+    setResults(existing);
+    setCampaigns(existingCampaigns);
+    setDraftStatus(statuses);
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // On mount: render cached leads instantly, revalidate in background
+  useEffect(() => {
+    // Render cached leads immediately (instant tab switch)
+    const cached = ensureLeads();
+    cached.then((l) => {
+      setLeads(l);
+      setLoading(false);
+      loadOutboundData(l);
+    });
+
+    // Subscribe to updates (background revalidation)
+    const unsub = subscribeLeads((l) => {
+      setLeads(l);
+      loadOutboundData(l);
+    });
+    return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Group leads by company domain
   const accounts: Account[] = (() => {

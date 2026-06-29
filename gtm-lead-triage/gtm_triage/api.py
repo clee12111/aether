@@ -476,6 +476,7 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         crm_data["seniority"] = result.enrichment.get("seniority", "")
     try:
         _crm.upsert(lead.email, crm_data)
+        _invalidate_leads_cache()
     except Exception as exc:
         logger.warning("CRM upsert failed for run %s: %s", result.run_id[:8], exc)
 
@@ -639,12 +640,30 @@ def get_run(run_id: str) -> dict[str, Any]:
     return resp
 
 
+# ── Leads cache (avoids 3.5s HubSpot API on every tab switch) ──────────────
+import time as _time_mod
+
+_leads_cache: list[dict[str, Any]] = []
+_leads_cache_at: float = 0.0
+_LEADS_CACHE_TTL = 10.0  # seconds
+
+
+def _invalidate_leads_cache() -> None:
+    global _leads_cache_at
+    _leads_cache_at = 0.0
+
+
 @app.get("/leads")
 def list_leads(limit: int = 50) -> list[dict[str, Any]]:
+    global _leads_cache, _leads_cache_at
+
+    now = _time_mod.monotonic()
+    if _leads_cache and (now - _leads_cache_at) < _LEADS_CACHE_TTL:
+        return _leads_cache
+
     contacts = _crm.list_contacts(limit)
 
     # Join CRM contacts with their latest run from the trace store.
-    # list_runs returns lead_email + run_id from run_end events.
     runs = _trace.list_runs(limit=200)
     email_to_run: dict[str, str] = {}
     for r in runs:
@@ -656,6 +675,8 @@ def list_leads(limit: int = 50) -> list[dict[str, Any]]:
         if "run_id" not in contact or not contact.get("run_id"):
             contact["run_id"] = email_to_run.get(contact.get("email", ""), "")
 
+    _leads_cache = contacts
+    _leads_cache_at = now
     return contacts
 
 
