@@ -372,11 +372,25 @@ export default function OutboundPage() {
                 </div>
               </div>
 
-              {/* Selected contact's draft */}
+              {/* Selected contact's detail states */}
               {selectedContact && selStatus === "loading" && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3"><div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" /><p className="text-xs text-stone-500">Drafting outreach for {selLead?.company || selectedContact.split("@")[1]}...</p></div>
-                  <div className="skeleton h-24 rounded-lg" />
+                <div className="bg-[var(--surface)] border border-stone-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    <div>
+                      <p className="text-xs font-medium text-stone-700">Generating outreach for {selLead?.name || selLead?.company || selectedContact.split("@")[1]}</p>
+                      <p className="text-[10px] text-stone-400">Researching company, scoring fit, drafting email...</p>
+                    </div>
+                  </div>
+                  <div className="skeleton h-16 rounded-lg mb-2" />
+                  <div className="skeleton h-10 rounded-lg" />
+                </div>
+              )}
+
+              {/* Cold/disqualified: draft ready but empty = explicit message */}
+              {selectedContact && selStatus === "ready" && sel && !drafts?.length && (
+                <div className="bg-[var(--surface)] border border-stone-200 rounded-lg p-4">
+                  <p className="text-xs text-stone-500">No outreach drafted for this contact ({sel.final_tier || "cold"} fit). Only warm and hot leads get tailored drafts.</p>
                 </div>
               )}
 

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { apiGet } from "@/lib/api";
-import { Lead } from "@/lib/tokens";
+import { Lead, getLeads, ensureLeads, subscribeLeads } from "@/lib/leads-store";
 
 /* -- Stage data ----------------------------------------------------------- */
 
@@ -46,17 +46,18 @@ const ACCENT = "#4f46e5";
 /* -- Component ------------------------------------------------------------ */
 
 export default function ArchitecturePage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeads] = useState<Lead[]>(getLeads());
   const [runs, setRuns] = useState<Array<Record<string, unknown>>>([]);
   const [active, setActive] = useState<number | null>(null);
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const [l, r] = await Promise.all([apiGet<Lead[]>("/leads"), apiGet<Array<Record<string, unknown>>>("/runs?limit=200")]);
-      setLeads(l); setRuns(r);
-    } catch { /* */ }
+  useEffect(() => {
+    // Leads from shared store (instant if cached)
+    ensureLeads().then(setLeads);
+    const unsub = subscribeLeads(setLeads);
+    // Runs fetched directly (not cached in store)
+    apiGet<Array<Record<string, unknown>>>("/runs?limit=200").then(setRuns).catch(() => {});
+    return unsub;
   }, []);
-  useEffect(() => { fetchStats(); }, [fetchStats]);
 
   const totalLeads = leads.length;
   const totalCompanies = new Set(leads.map(l => l.email.includes("@") ? l.email.split("@")[1] : l.email)).size;
