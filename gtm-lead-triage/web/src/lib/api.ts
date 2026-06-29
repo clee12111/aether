@@ -54,3 +54,20 @@ export async function apiDelete<T>(path: string): Promise<T> {
 export function warmup(): void {
   fetch(`${API}/ready`).catch(() => {});
 }
+
+/**
+ * Ping /ready and return whether the backend responded within `timeoutMs`.
+ * Resolves true = backend is up, false = cold/unreachable.
+ */
+export async function checkReady(timeoutMs = 8_000): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API}/ready`, { signal: controller.signal });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}

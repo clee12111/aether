@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ColdStartBanner } from "@/components/cold-start-banner";
 
 const LINKS = [
   { href: "/inbound", label: "Inbound" },
@@ -14,6 +15,7 @@ export function Nav() {
   const path = usePathname();
 
   return (
+    <>
     <header className="border-b border-stone-200 bg-[var(--surface)] px-6 py-2.5 flex items-center gap-6 shrink-0">
       <Link href="/" className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-stone-900 flex items-center justify-center">
@@ -45,5 +47,7 @@ export function Nav() {
 
       {/* Three tabs only - no extra nav items */}
     </header>
+    <ColdStartBanner />
+    </>
   );
 }
