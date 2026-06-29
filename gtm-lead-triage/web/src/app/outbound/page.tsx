@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { TIER_BADGE, TIER_DOT, CHANNEL_DOT, DraftVariant, factLabel } from "@/lib/tokens";
-import { Lead, ensureLeads, subscribeLeads, invalidateLeads } from "@/lib/leads-store";
+import { Lead, getLeads, ensureLeads, subscribeLeads } from "@/lib/leads-store";
 
 /* -- Types ---------------------------------------------------------------- */
 
@@ -23,8 +23,10 @@ const TIER_ORDER: Record<string, number> = { hot: 0, warm: 1, cold: 2, disqualif
 /* -- Component ------------------------------------------------------------ */
 
 export default function OutboundPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Read cached leads SYNCHRONOUSLY on init (instant render on tab switch)
+  const cachedLeads = getLeads();
+  const [leads, setLeads] = useState<Lead[]>(cachedLeads);
+  const [loading, setLoading] = useState(cachedLeads.length === 0);
   const [results, setResults] = useState<Record<string, OutboundResult>>({});
   const [campaigns, setCampaigns] = useState<Record<string, Record<string, unknown>>>({});
   const [draftStatus, setDraftStatus] = useState<Record<string, DraftStatus>>({});
@@ -70,20 +72,28 @@ export default function OutboundPage() {
     setDraftStatus(statuses);
   }, []);
 
-  // On mount: render cached leads instantly, revalidate in background
+  // Subscribe to store updates + trigger background revalidation
   useEffect(() => {
-    // Render cached leads immediately (instant tab switch)
-    const cached = ensureLeads();
-    cached.then((l) => {
-      setLeads(l);
+    // If we have cached leads, load their outbound data immediately
+    if (cachedLeads.length > 0) {
+      loadOutboundData(cachedLeads);
+    }
+
+    // Trigger background revalidation (fetches fresh if stale)
+    ensureLeads().then((fresh) => {
+      setLeads(fresh);
       setLoading(false);
-      loadOutboundData(l);
+      // Only reload outbound data if leads changed
+      if (fresh.length !== cachedLeads.length) {
+        loadOutboundData(fresh);
+      }
     });
 
-    // Subscribe to updates (background revalidation)
-    const unsub = subscribeLeads((l) => {
-      setLeads(l);
-      loadOutboundData(l);
+    // Subscribe so background refreshes / new-lead invalidations update us
+    const unsub = subscribeLeads((updated) => {
+      setLeads(updated);
+      setLoading(false);
+      loadOutboundData(updated);
     });
     return unsub;
   // eslint-disable-next-line react-hooks/exhaustive-deps
