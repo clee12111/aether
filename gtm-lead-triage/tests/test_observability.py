@@ -194,6 +194,134 @@ class TestReadiness:
         assert "/ready" in _PUBLIC_PATHS
 
 
+# ── PDL enrichment probe unit tests ─────────────────────────────────────────
+
+
+import os
+from unittest.mock import MagicMock, patch
+
+
+class TestEnrichmentProbe:
+    """Unit tests for _probe_pdl() and the /ready enrichment check.
+
+    All PDL HTTP calls are mocked — no network, no credits consumed.
+    The probe cache is reset before each test to avoid cross-test bleed.
+    """
+
+    def _reset_probe_cache(self):
+        from gtm_triage import api
+        api._PDL_PROBE_RESULT = ""
+        api._PDL_PROBE_EXPIRES = 0.0
+
+    # ── ENRICHMENT_PROVIDER=mock ─────────────────────────────────────────────
+
+    def test_mock_provider_is_ok(self):
+        """mock provider → enrichment='ok' without any PDL call."""
+        self._reset_probe_cache()
+        with patch.dict(os.environ, {"ENRICHMENT_PROVIDER": "mock"}, clear=False):
+            with _make_client() as client:
+                resp = client.get("/ready")
+                assert resp.json()["checks"]["enrichment"] == "ok"
+
+    # ── ENRICHMENT_PROVIDER=pdl, key missing ────────────────────────────────
+
+    def test_pdl_no_key_is_fail(self):
+        """pdl provider + no key → enrichment='fail'."""
+        self._reset_probe_cache()
+        env = {"ENRICHMENT_PROVIDER": "pdl", "PDL_API_KEY": ""}
+        with patch.dict(os.environ, env, clear=False):
+            with _make_client() as client:
+                resp = client.get("/ready")
+                assert resp.json()["checks"]["enrichment"] == "fail"
+
+    # ── ENRICHMENT_PROVIDER=pdl, key set, PDL returns data ──────────────────
+
+    def test_pdl_returns_data_is_ok(self):
+        """pdl + key + PDL returns a person record → enrichment='ok'."""
+        self._reset_probe_cache()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": {"job_title": "Engineer"}, "likelihood": 9}
+
+        env = {"ENRICHMENT_PROVIDER": "pdl", "PDL_API_KEY": "test-key"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("httpx.get", return_value=mock_resp):
+                with _make_client() as client:
+                    resp = client.get("/ready")
+                    assert resp.json()["checks"]["enrichment"] == "ok"
+
+    # ── ENRICHMENT_PROVIDER=pdl, key set, PDL returns empty ─────────────────
+
+    def test_pdl_returns_empty_is_degraded(self):
+        """pdl + key + PDL returns 404 (email not found) → enrichment='degraded'."""
+        self._reset_probe_cache()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_resp.json.return_value = {"status": 404, "error": "No records found"}
+
+        env = {"ENRICHMENT_PROVIDER": "pdl", "PDL_API_KEY": "test-key"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("httpx.get", return_value=mock_resp):
+                with _make_client() as client:
+                    resp = client.get("/ready")
+                    assert resp.json()["checks"]["enrichment"] == "degraded"
+
+    def test_pdl_200_no_data_field_is_degraded(self):
+        """pdl + key + 200 response but no 'data' key → enrichment='degraded'."""
+        self._reset_probe_cache()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"status": 200}  # missing 'data'
+
+        env = {"ENRICHMENT_PROVIDER": "pdl", "PDL_API_KEY": "test-key"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("httpx.get", return_value=mock_resp):
+                with _make_client() as client:
+                    resp = client.get("/ready")
+                    assert resp.json()["checks"]["enrichment"] == "degraded"
+
+    # ── ENRICHMENT_PROVIDER=pdl, network error ───────────────────────────────
+
+    def test_pdl_network_error_is_degraded(self):
+        """pdl + key + timeout/network error → enrichment='degraded', no crash."""
+        self._reset_probe_cache()
+        env = {"ENRICHMENT_PROVIDER": "pdl", "PDL_API_KEY": "test-key"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("httpx.get", side_effect=Exception("connection timeout")):
+                with _make_client() as client:
+                    resp = client.get("/ready")
+                    assert resp.status_code == 200  # enrichment is non-fatal
+                    assert resp.json()["checks"]["enrichment"] == "degraded"
+
+    # ── ENRICHMENT_PROVIDER=<unknown> ────────────────────────────────────────
+
+    def test_unknown_provider_is_misconfigured(self):
+        """Unrecognised ENRICHMENT_PROVIDER → enrichment='misconfigured'."""
+        self._reset_probe_cache()
+        with patch.dict(os.environ, {"ENRICHMENT_PROVIDER": "splunk"}, clear=False):
+            with _make_client() as client:
+                resp = client.get("/ready")
+                assert resp.json()["checks"]["enrichment"] == "misconfigured"
+
+    # ── Probe result TTL cache ───────────────────────────────────────────────
+
+    def test_probe_result_is_cached(self):
+        """Second /ready call within TTL window must not make a second HTTP call."""
+        self._reset_probe_cache()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": {"job_title": "Engineer"}}
+
+        env = {"ENRICHMENT_PROVIDER": "pdl", "PDL_API_KEY": "test-key"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("httpx.get", return_value=mock_resp) as mock_get:
+                with _make_client() as client:
+                    client.get("/ready")
+                    client.get("/ready")  # second call within TTL
+                    # httpx.get should have been called exactly once
+                    assert mock_get.call_count == 1
+
+
 # ── K3: Prometheus metrics ───────────────────────────────────────────────────
 
 

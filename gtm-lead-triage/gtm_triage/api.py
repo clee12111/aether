@@ -33,6 +33,8 @@ import asyncio
 import hashlib
 import logging
 import os
+import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
@@ -300,13 +302,82 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+# ── PDL enrichment health probe ──────────────────────────────────────────────
+# Cached so keep-warm pings don't consume PDL API credits.
+# Override the probe email via PDL_PROBE_EMAIL env var if PDL doesn't have
+# the default email in its database (set to any email you know PDL resolves).
+
+_PDL_PROBE_LOCK: threading.Lock = threading.Lock()
+_PDL_PROBE_RESULT: str = ""
+_PDL_PROBE_EXPIRES: float = 0.0
+_PDL_PROBE_TTL: int = 300  # seconds (5 minutes)
+
+
+def _probe_pdl() -> str:
+    """One lightweight PDL person-enrich call against a known fixture email.
+
+    Returns
+    -------
+    "fail"      PDL_API_KEY is not set — enrichment cannot work at all.
+    "ok"        PDL responded with a person record (key valid, API reachable).
+    "degraded"  PDL responded but returned no data for the probe email
+                (quota hit, record not found, unexpected status), OR the
+                call timed out / threw a network error.
+
+    Result is cached for _PDL_PROBE_TTL seconds so repeated /ready calls
+    (keep-warm, uptime monitors) don't each spend a PDL credit.
+    """
+    global _PDL_PROBE_RESULT, _PDL_PROBE_EXPIRES
+
+    api_key = os.environ.get("PDL_API_KEY", "").strip()
+    if not api_key:
+        return "fail"
+
+    now = time.monotonic()
+    with _PDL_PROBE_LOCK:
+        if _PDL_PROBE_RESULT and now < _PDL_PROBE_EXPIRES:
+            return _PDL_PROBE_RESULT
+
+        probe_email = os.environ.get("PDL_PROBE_EMAIL", "linus.torvalds@linux-foundation.org")
+        try:
+            import httpx as _httpx
+            resp = _httpx.get(
+                "https://api.peopledatalabs.com/v5/person/enrich",
+                params={"api_key": api_key, "email": probe_email},
+                timeout=5.0,
+            )
+            if resp.status_code == 200 and resp.json().get("data"):
+                result = "ok"
+            else:
+                logger.warning(
+                    "PDL probe: status=%s, data_present=%s (email=%s)",
+                    resp.status_code,
+                    bool(resp.json().get("data")) if resp.status_code == 200 else False,
+                    probe_email,
+                )
+                result = "degraded"
+        except Exception as exc:
+            logger.warning("PDL probe failed: %s", exc)
+            result = "degraded"
+
+        _PDL_PROBE_RESULT = result
+        _PDL_PROBE_EXPIRES = now + _PDL_PROBE_TTL
+        return result
+
+
 @app.get("/ready")
 def ready() -> JSONResponse:
     """Readiness probe — checks actual dependency health.
 
     Returns 200 + {"ready": true} when core deps (trace, CRM) are up.
     Returns 503 + {"ready": false} when a core dep is down.
-    Enrichment unavailability is degraded, not down.
+    Enrichment unavailability is degraded (non-fatal), not down.
+
+    checks.enrichment values:
+      "ok"            — mock (always works) or pdl probe returned a record
+      "degraded"      — pdl probe reached the API but got no data / error
+      "fail"          — PDL_API_KEY is missing
+      "misconfigured" — ENRICHMENT_PROVIDER is set to an unrecognised value
     """
     checks: dict[str, str] = {}
 
@@ -316,9 +387,14 @@ def ready() -> JSONResponse:
     crm_ok = _crm.ping() if _crm else False
     checks["crm"] = "ok" if crm_ok else "fail"
 
-    # Enrichment is optional — degraded, not down
+    # Enrichment: real probe for pdl; instant for mock; error for unknowns
     enrichment_backend = os.environ.get("ENRICHMENT_PROVIDER", "mock")
-    checks["enrichment"] = "ok" if enrichment_backend == "mock" else "degraded"
+    if enrichment_backend == "mock":
+        checks["enrichment"] = "ok"
+    elif enrichment_backend == "pdl":
+        checks["enrichment"] = _probe_pdl()
+    else:
+        checks["enrichment"] = "misconfigured"
 
     core_ready = trace_ok and crm_ok
     body = {"ready": core_ready, "checks": checks}
@@ -514,8 +590,8 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
                     company=lead.company, name=lead.name,
                     run_id=result.run_id, trace=_trace,
                 )
-            except Exception:
-                pass
+            except Exception as _pb_exc:
+                logger.warning("PB write-back raised for lead %s: %s", lead.email, _pb_exc)
 
             # Update stored result with brief + pb_note
             enriched = dict(result_dict)
@@ -579,6 +655,7 @@ async def send_to_productboard(req: PBSendRequest) -> dict[str, Any]:
             content=req.content,
             customer_email=req.email,
             company_domain=domain,
+            company_name=req.company or None,
             tags=["inbound", "manual"],
         )
         return {

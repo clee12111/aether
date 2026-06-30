@@ -10,7 +10,7 @@ Usage:
 
 Expected pass/fail on the CURRENT deploy:
   test_config_keys       — PASS
-  test_ready_all_ok      — XFAIL (enrichment="degraded"; api.py:321 inverts the check)
+  test_ready_all_ok      — PASS  (enrichment probe now does a real PDL call)
   test_triage_datadoghq  — PASS  (tier returned + real PB note created)
   test_ui_loads          — PASS  (Playwright, skipped if playwright not installed)
 """
@@ -77,20 +77,13 @@ def test_config_keys(client: httpx.Client) -> None:
 
 # ── Test 2: /ready all ok ─────────────────────────────────────────────────────
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "api.py:321 unconditionally marks enrichment='degraded' whenever "
-        "ENRICHMENT_PROVIDER != 'mock', even when PDL is live and healthy. "
-        "Remove xfail once the /ready check is corrected."
-    ),
-)
 def test_ready_all_ok(client: httpx.Client) -> None:
     """GET /ready: every check must be 'ok'.
 
-    Written for the CORRECT desired state — currently xfail because
-    checks['enrichment'] = 'degraded' regardless of PDL health (api.py:321).
-    Becomes a normal pass once that line is fixed.
+    enrichment is now a real PDL probe (not the old static string compare).
+    If this fails in production, checks['enrichment'] will be 'degraded'
+    (PDL reachable but probe email not found — set PDL_PROBE_EMAIL) or
+    'fail' (PDL_API_KEY not set on Render).
     """
     resp = client.get(_api("/ready"))
     assert resp.status_code == 200, f"/ready {resp.status_code}: {resp.text}"
