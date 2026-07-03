@@ -57,17 +57,28 @@ export function warmup(): void {
 
 /**
  * Ping /ready and return whether the backend responded within `timeoutMs`.
- * Resolves true = backend is up, false = cold/unreachable.
+ * On a 503 (backend up but deps still reconnecting after cold start), retries
+ * up to `retries` times with `retryDelayMs` between attempts — so a transient
+ * Postgres reconnect doesn't permanently show the "unreachable" banner.
+ * Network errors (server truly unreachable) fail fast without retrying.
+ * Each attempt is capped at `attemptTimeoutMs` regardless of `timeoutMs`.
+ * Resolves true = backend is up, false = unreachable.
  */
-export async function checkReady(timeoutMs = 8_000): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${API}/ready`, { signal: controller.signal });
-    return res.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
+export async function checkReady(timeoutMs = 8_000, retries = 4, retryDelayMs = 5_000): Promise<boolean> {
+  const attemptTimeoutMs = Math.min(timeoutMs, 8_000);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
+    try {
+      const res = await fetch(`${API}/ready`, { signal: controller.signal });
+      if (res.ok) return true;
+      if (res.status !== 503) return false; // non-transient error, don't retry
+    } catch {
+      return false; // network error — server is truly unreachable, fail fast
+    } finally {
+      clearTimeout(timer);
+    }
+    if (attempt < retries) await new Promise((r) => setTimeout(r, retryDelayMs));
   }
+  return false;
 }
